@@ -138,6 +138,7 @@ static struct ShootWindow shoot_window_setup(struct ShootWindowData *hints);
 static void shoot_window_close(struct ShootWindow window);
 static bool32 shoot_window_is_open(struct ShootWindow window);
 static void shoot_window_clear(struct ShootWindow window);
+static void shoot_window_start_physics_tick(struct ShootWindow window);
 static void shoot_window_poll_events(struct ShootWindow window);
 static void shoot_window_draw(struct ShootWindow window);
 

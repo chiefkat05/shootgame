@@ -196,15 +196,23 @@ static void shoot_window_clear(struct ShootWindow window)
     shoot_image_fill(&window.data->screen, 255 << 24 | window.data->background_blue << 16 | window.data->background_green << 8 | window.data->background_red);
 }
 
-static void shoot_window_poll_events(struct ShootWindow window)
+static void shoot_window_start_physics_tick(struct ShootWindow window)
 {
-    glfwPollEvents();
-    joystickPoll(window.data, 0);
-
     real previous_time = window.data->current_time;
     window.data->current_time = glfwGetTime();
     real deltaTime = window.data->current_time - previous_time;
     window.data->accumulated_time += deltaTime;
+}
+static void shoot_window_poll_events(struct ShootWindow window)
+{
+    int i;
+    for (i = 0; i < MAX_PLAYERS; ++i)
+    {
+        shoot_input_update(&window.data->input[i]);
+    }
+
+    glfwPollEvents();
+    joystickPoll(window.data, 0);
 }
 
 static void shoot_window_draw(struct ShootWindow window)

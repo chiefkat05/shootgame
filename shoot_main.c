@@ -20,10 +20,17 @@
 #include "shoot_window.c"
 #include "shoot_input.c"
 
-/** NOTE: The game proper. - chief **/
-#include "shoot_system.c"
-
 static struct ShootWindow window;
+
+static bool32 game_end = FALSE;
+
+enum game_state {
+    GAME_STATE_MENU,
+    GAME_STATE_PONG,
+};
+enum game_state state = GAME_STATE_MENU;
+
+/** ------------ PONG ------------ **/
 
 static const real ball_width = 10.0, ball_height = 10.0;
 static const real player_height = 40.0;
@@ -31,9 +38,7 @@ static const real player_height = 40.0;
 static real ball_x = 0.0, ball_y = 0.0, ball_speed_x = 100.0, ball_speed_y = 100.0;
 static real player_bottom = 0.0, player_top = player_height, player_width = 10.0, player_speed = 200.0;
 
-static bool32 game_end = FALSE;
-
-static bool32 game_loop()
+static void pong_loop()
 {
     ball_x += ball_speed_x * PHYSICS_TICK_SPEED;
     ball_y += ball_speed_y * PHYSICS_TICK_SPEED;
@@ -86,6 +91,71 @@ static bool32 game_loop()
         player_top = SCREEN_HEIGHT;
         player_bottom = player_top - player_height;
     }
+}
+static void pong_render()
+{
+    shoot_image_draw_rect(&window.data->screen, ball_x, ball_y, ball_x + ball_width, ball_y + ball_height, 0.9, 0.9, 0.9, 1.0);
+    shoot_image_draw_rect(&window.data->screen, SCREEN_WIDTH - player_width, player_bottom,
+                    SCREEN_WIDTH, player_top, 1.0, 1.0, 1.0, 1.0);
+}
+/** ------------ MENU ------------ **/
+
+static int mouseX, mouseY;
+
+static bool32 pong_hovered, pong_held;
+
+static void menu_loop()
+{
+    real mouseXDiv = (real)INT16_MAX / (real)SCREEN_WIDTH;
+    real mouseYDiv = (real)INT16_MAX / (real)SCREEN_HEIGHT;
+    mouseX = (int16)((real)shoot_input_get(&window.data->input[0], MOUSE_X) / mouseXDiv);
+    mouseY = (int16)((real)shoot_input_get(&window.data->input[0], MOUSE_Y) / mouseYDiv);
+
+    if (mouseX > 20 && mouseY > 20 && mouseX < 60 && mouseY < 60)
+    {
+        pong_hovered = TRUE;
+        if (shoot_input_get(&window.data->input[0], MOUSE_BUTTON_LEFT)) { pong_held = TRUE; }
+        else { pong_held = FALSE; }
+    }
+    else
+    {
+        pong_hovered = FALSE;
+        pong_held = FALSE;
+    }
+    if (pong_hovered && shoot_input_just_released(&window.data->input[0], MOUSE_BUTTON_LEFT))
+    {
+        state = GAME_STATE_PONG;
+    }
+}
+static void menu_render()
+{
+    if (pong_held)
+    { shoot_image_draw_rect(&window.data->screen, 20, 20, 60, 60, 0.4, 0.7, 0.7, 1.0); }
+    else if (pong_hovered)
+    { shoot_image_draw_rect(&window.data->screen, 20, 20, 60, 60, 0.6, 0.95, 0.95, 1.0); }
+    else
+    { shoot_image_draw_rect(&window.data->screen, 20, 20, 60, 60, 0.5, 0.9, 0.9, 1.0); }
+    shoot_image_draw_rect(&window.data->screen, mouseX - 5, mouseY - 5, mouseX + 5, mouseY + 5, 0.0, 0.0, 0.0, 1.0);
+}
+
+static bool32 game_loop()
+{
+    if (shoot_input_just_released(&window.data->input[0], KEY_ESC))
+    {
+        state = GAME_STATE_MENU;
+    }
+    switch(state)
+    {
+        case GAME_STATE_MENU:
+            menu_loop();
+            break;
+        case GAME_STATE_PONG:
+            pong_loop();
+            break;
+        default:
+            game_end = TRUE;
+            break;
+    }
 
     window.data->accumulated_time -= PHYSICS_TICK_SPEED;
     if (window.data->accumulated_time >= PHYSICS_TICK_SPEED) { return TRUE; }
@@ -93,14 +163,23 @@ static bool32 game_loop()
 }
 static void game_render()
 {
-    shoot_image_draw_rect(&window.data->screen, ball_x, ball_y, ball_x + ball_width, ball_y + ball_height, 255, 255, 0, 255);
-    shoot_image_draw_rect(&window.data->screen, SCREEN_WIDTH - player_width, player_bottom,
-                    SCREEN_WIDTH, player_top, 255, 255, 255, 255);
+    switch(state)
+    {
+        case GAME_STATE_MENU:
+            menu_render();
+            break;
+        case GAME_STATE_PONG:
+            pong_render();
+            break;
+        default:
+            game_end = TRUE;
+            break;
+    }
 }
 
 int main()
 {
-    shoot_system_check_compatibility();
+    shoot_check_compatibility();
 
     glfwInit();
     window = shoot_window_setup(0);
@@ -110,6 +189,7 @@ int main()
     {
         shoot_window_clear(window);
 
+        shoot_window_start_physics_tick(window);
         shoot_window_poll_events(window);
 
         while (game_loop()) {}
