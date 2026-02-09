@@ -178,30 +178,16 @@ static real shoot_opengl_screen_quad_vertices[] = {
 /* ------------------ Sound ------------------ */
 
 
-/* ------------------ System ------------------ */
-
-enum ShootSystemScene
-{
-    SHOOT_SCENE_START,
-    SHOOT_SCENE_MENU,
-    SHOOT_SCENE_CHARACTER,
-    SHOOT_SCENE_MAIN,
-    SHOOT_SCENE_LOST,
-    SHOOT_SCENE_WON,
-    SHOOT_SCENE_GALLERY,
-    SHOOT_SCENE_count
-};
-struct ShootSystem
-{
-
-};
-static void shoot_system_check_compatibility();
-static struct ShootSystem shoot_system_open();
-static void shoot_system_load_scene(struct ShootSystem *system, enum ShootSystemScene scene);
-
 /* ------------------ Generic ------------------ */
 
 static const char *shoot_read_file_string(struct ShootArena *memory, const char *path);
 static void *shoot_read_file_raw(struct ShootArena *memory, const char *path);
+
+/* ------------------ Shapes ------------------ */
+
+struct ShootRect
+{
+    int32 left, bottom, right, top;
+};
 
 #endif

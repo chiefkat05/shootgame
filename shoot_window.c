@@ -222,7 +222,6 @@ static void shoot_window_draw(struct ShootWindow window)
 
     shoot_opengl_copy_data_to_texture(window.opengl_texture, window.data->screen.data, window.data->screen.width, window.data->screen.height);
 
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINES);
     glUseProgram(window.opengl_shader);
     glBindTexture(GL_TEXTURE_2D, window.opengl_texture);
     glBindVertexArray(window.opengl_vao);

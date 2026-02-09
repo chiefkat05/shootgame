@@ -10,9 +10,9 @@ static void shoot_image_draw_pixel(struct ShootImage *image, int xpos, int ypos,
     uint32 destinationpixel = *pixel_location;
 
     real invalpha = 1.0f - alpha;
-    real destination_redf = (real)(destinationpixel >> 16 & 255) / 255.0f;
+    real destination_redf = (real)(destinationpixel & 255) / 255.0f;
     real destination_greenf = (real)(destinationpixel >> 8 & 255) / 255.0f;
-    real destination_bluef = (real)(destinationpixel & 255) / 255.0f;
+    real destination_bluef = (real)(destinationpixel >> 16 & 255) / 255.0f;
     
     real redmix = shoot_math_lerp(red, destination_redf, invalpha);
     real greenmix = shoot_math_lerp(green, destination_greenf, invalpha);
@@ -22,7 +22,7 @@ static void shoot_image_draw_pixel(struct ShootImage *image, int xpos, int ypos,
     uint8 green8 = (uint8)shoot_math_round_to_int(greenmix * 255.0f);
     uint8 blue8 = (uint8)shoot_math_round_to_int(bluemix * 255.0f);
 
-    *pixel_location = 255 << 24 | red8 << 16 | green8 << 8 | blue8;
+    *pixel_location = 255 << 24 | red8 | green8 << 8 | blue8 << 16;
 }
 static void shoot_image_draw_rect(struct ShootImage *image, int left, int bottom, int right, int top, real red, real green, real blue, real alpha)
 {
