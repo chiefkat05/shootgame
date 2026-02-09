@@ -1,0 +1,37 @@
+image playerIMG ship.bmp
+image dungeonIMG room.bmp
+
+create playerOBJ
+give playerIMG to playerOBJ
+move playerOBJ when input any
+
+tilemap dungeonMAP
+give dungeonIMG to dungeonMAP
+
+begin tile for dungeonMAP
+    image x 0
+    image y 0
+    image width 8
+    image height 8
+    collide playerOBJ solid
+
+begin map for dungeonMAP
+    1111111111
+    1        1
+    1        1
+    1        1
+    1        1
+    1        1
+    1        1
+    1        1
+    1        1
+    1        1
+    1111111111
+end map for dungeonMAP
+
+create enemyOBJ every 2 seconds until 4 exist
+give dungeonIMG to enemyOBJ
+
+move enemyOBJ towards playerOBJ
+
+reload when enemyOBJ collides with playerOBJ
