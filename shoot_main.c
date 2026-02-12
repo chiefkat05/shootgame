@@ -46,140 +46,188 @@
 #include <emscripten.h>
 #endif
 
+/** ------------ GAME ------------ **/
+
 static struct ShootWindow window;
 
 static bool32 game_end = FALSE;
 
 enum game_state {
+    GAME_STATE_NULL,
     GAME_STATE_MENU,
     GAME_STATE_PONG,
 };
 enum game_state state = GAME_STATE_MENU;
 
+enum ShootNetStatus {
+    SHOOT_NET_STATUS_OFFLINE,
+    SHOOT_NET_STATUS_PLAYER_ONE,
+    SHOOT_NET_STATUS_PLAYER_TWO,
+};
+static enum ShootNetStatus network_state;
+static bool32 network_setup;
+fd_set network_master_set;
+SOCKET network_socket, destination_socket, max_socket;
+struct addrinfo *peer_address;
+
 /** ------------ PONG ------------ **/
 
-static const real ball_width = 10.0, ball_height = 10.0, ball_start_speed = 50.0;
-static const real player_height = 40.0, player_2_height = 40.0;
+static const real ball_width = 10.0, ball_height = 10.0, ball_speed = 50.0;
+static const real player_height = 40.0, player_width = 10.0, player_speed = 200.0;
 
-static real ball_x = SCREEN_WIDTH / 2, ball_y = SCREEN_HEIGHT / 2,
-        ball_speed = ball_start_speed, ball_x_direction = 1.0, ball_y_direction = 1.0;
-static real player_bottom = 0.0, player_top = player_height, player_width = 10.0, player_speed = 200.0;
-static real player_2_bottom = 0.0, player_2_top = player_2_height, player_2_width = 10.0, player_2_speed = 200.0;
+// static real ball_x = SCREEN_WIDTH / 2, ball_y = SCREEN_HEIGHT / 2,
+//         ball_speed = ball_start_speed, ball_x_direction = 1.0, ball_y_direction = 1.0;
+
+struct shoot_pong_player
+{
+    real bottom, top;
+};
+struct shoot_pong_ball
+{
+    real ball_x, ball_y;
+    real ball_x_direction, ball_y_direction;
+};
+
+struct shoot_pong_game_data
+{
+    struct shoot_pong_player player_one, player_two;
+    struct shoot_pong_ball ball;
+};
+static struct shoot_pong_game_data pong_data = {
+    .player_one = {.bottom = 0.0, .top = player_height},
+    .player_two = {.bottom = 0.0, .top = player_height},
+    .ball = {.ball_x = SCREEN_WIDTH / 2, .ball_y = SCREEN_HEIGHT / 2,
+    .ball_x_direction = 1.0, .ball_y_direction = 1.0}};
 
 static void pong_loop()
 {
-    ball_speed += 5.0 * PHYSICS_TICK_SPEED;
-    
-    ball_x += ball_speed * ball_x_direction * PHYSICS_TICK_SPEED;
-    ball_y += ball_speed * ball_y_direction * PHYSICS_TICK_SPEED;
+    pong_data.ball.ball_x += ball_speed * pong_data.ball.ball_x_direction * PHYSICS_TICK_SPEED;
+    pong_data.ball.ball_y += ball_speed * pong_data.ball.ball_y_direction * PHYSICS_TICK_SPEED;
 
-    ball_speed += 50.0 * PHYSICS_TICK_SPEED;
-
-    if (ball_x > SCREEN_WIDTH || ball_x < 0)
+    if (pong_data.ball.ball_x > SCREEN_WIDTH || pong_data.ball.ball_x < 0)
     {
-        state = GAME_STATE_MENU;
-        ball_x = SCREEN_WIDTH / 2;
-        ball_y = SCREEN_HEIGHT / 2;
-        ball_speed = ball_start_speed;
+        pong_data.ball.ball_x = SCREEN_WIDTH / 2;
+        pong_data.ball.ball_y = SCREEN_HEIGHT / 2;
     }
 
-    if (ball_y > SCREEN_HEIGHT - ball_height)
+    if (pong_data.ball.ball_y > SCREEN_HEIGHT - ball_height)
     {
-        ball_y = SCREEN_HEIGHT - ball_height;
-        ball_y_direction = -ball_y_direction;
+        pong_data.ball.ball_y = SCREEN_HEIGHT - ball_height;
+        pong_data.ball.ball_y_direction = -pong_data.ball.ball_y_direction;
     }
-    if (ball_y < 0)
+    if (pong_data.ball.ball_y < 0)
     {
-        ball_y = 0;
-        ball_y_direction = -ball_y_direction;
+        pong_data.ball.ball_y = 0;
+        pong_data.ball.ball_y_direction = -pong_data.ball.ball_y_direction;
     }
 
-    if (ball_x > SCREEN_WIDTH - player_2_width - ball_width && ball_y > player_2_bottom && ball_y < player_2_top)
+    if (pong_data.ball.ball_x > SCREEN_WIDTH - player_width - ball_width &&
+        pong_data.ball.ball_y > pong_data.player_two.bottom && pong_data.ball.ball_y < pong_data.player_two.top)
     {
-        ball_x = SCREEN_WIDTH - player_2_width - ball_width;
-        ball_x_direction = -ball_x_direction;
+        pong_data.ball.ball_x = SCREEN_WIDTH - player_width - ball_width;
+        pong_data.ball.ball_x_direction = -pong_data.ball.ball_x_direction;
     }
-    if (ball_x < player_width && ball_y > player_bottom && ball_y < player_top)
+    if (pong_data.ball.ball_x < player_width && pong_data.ball.ball_y > pong_data.player_one.bottom &&
+        pong_data.ball.ball_y < pong_data.player_one.top)
     {
-        ball_x = player_width;
-        ball_x_direction = -ball_x_direction;
+        pong_data.ball.ball_x = player_width;
+        pong_data.ball.ball_x_direction = -pong_data.ball.ball_x_direction;
     }
 
     if (shoot_input_get(&window.data->input[0], KEY_W))
     {
-        player_bottom += player_speed * PHYSICS_TICK_SPEED;
-        player_top = player_bottom + player_height;
+        pong_data.player_one.bottom += player_speed * PHYSICS_TICK_SPEED;
+        pong_data.player_one.top = pong_data.player_one.bottom + player_height;
     }
     if (shoot_input_get(&window.data->input[0], KEY_S))
     {
-        player_bottom -= player_speed * PHYSICS_TICK_SPEED;
-        player_top = player_bottom + player_height;
+        pong_data.player_one.bottom -= player_speed * PHYSICS_TICK_SPEED;
+        pong_data.player_one.top = pong_data.player_one.bottom + player_height;
     }
-    if (player_bottom < 0.0)
+    if (pong_data.player_one.bottom < 0.0)
     {
-        player_bottom = 0.0;
-        player_top = player_bottom + player_height;
+        pong_data.player_one.bottom = 0.0;
+        pong_data.player_one.top = pong_data.player_one.bottom + player_height;
     }
-    if (player_top > SCREEN_HEIGHT)
+    if (pong_data.player_one.top > SCREEN_HEIGHT)
     {
-        player_top = SCREEN_HEIGHT;
-        player_bottom = player_top - player_height;
+        pong_data.player_one.top = SCREEN_HEIGHT;
+        pong_data.player_one.bottom = pong_data.player_one.top - player_height;
     }
 
     if (shoot_input_get(&window.data->input[0], KEY_I))
     {
-        player_2_bottom += player_2_speed * PHYSICS_TICK_SPEED;
-        player_2_top = player_2_bottom + player_2_height;
+        pong_data.player_two.bottom += player_speed * PHYSICS_TICK_SPEED;
+        pong_data.player_two.top = pong_data.player_two.bottom + player_height;
     }
     if (shoot_input_get(&window.data->input[0], KEY_K))
     {
-        player_2_bottom -= player_2_speed * PHYSICS_TICK_SPEED;
-        player_2_top = player_2_bottom + player_2_height;
+        pong_data.player_two.bottom -= player_speed * PHYSICS_TICK_SPEED;
+        pong_data.player_two.top = pong_data.player_two.bottom + player_height;
     }
-    if (player_2_bottom < 0.0)
+    if (pong_data.player_two.bottom < 0.0)
     {
-        player_2_bottom = 0.0;
-        player_2_top = player_2_bottom + player_2_height;
+        pong_data.player_two.bottom = 0.0;
+        pong_data.player_two.top = pong_data.player_two.bottom + player_height;
     }
-    if (player_2_top > SCREEN_HEIGHT)
+    if (pong_data.player_two.top > SCREEN_HEIGHT)
     {
-        player_2_top = SCREEN_HEIGHT;
-        player_2_bottom = player_2_top - player_2_height;
+        pong_data.player_two.top = SCREEN_HEIGHT;
+        pong_data.player_two.bottom = pong_data.player_two.top - player_height;
+    }
+
+    
+    if (network_state == SHOOT_NET_STATUS_PLAYER_ONE)
+    {
+        struct shoot_pong_game_data temp_pong_data;
+        shoot_net_poll(network_socket, max_socket, &temp_pong_data, sizeof(temp_pong_data));
+
+        shoot_net_send(destination_socket, peer_address, &pong_data, sizeof(pong_data));
+
+        pong_data.player_two = temp_pong_data.player_two;
+    }
+    if (network_state == SHOOT_NET_STATUS_PLAYER_TWO)
+    {
+        struct shoot_pong_game_data temp_pong_data;
+        shoot_net_poll(network_socket, max_socket, &temp_pong_data, sizeof(temp_pong_data));
+
+        shoot_net_send(destination_socket, peer_address, &pong_data, sizeof(pong_data));
+
+        pong_data.ball = temp_pong_data.ball;
+        pong_data.player_one = temp_pong_data.player_one;
     }
 }
 static void pong_render()
 {
     shoot_image_draw_rect(&window.data->screen, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0.2, 0.7, 0.8, 1.0);
 
-    shoot_image_draw_rect(&window.data->screen, ball_x, ball_y, ball_x + ball_width, ball_y + ball_height, 1.0, 1.0, 1.0, 1.0);
-    shoot_image_draw_rect(&window.data->screen, 0, player_bottom,
-                    player_width, player_top, 1.0, 1.0, 1.0, 1.0);
-    shoot_image_draw_rect(&window.data->screen, SCREEN_WIDTH - player_2_width, player_2_bottom,
-                    SCREEN_WIDTH, player_2_top, 1.0, 1.0, 1.0, 1.0);
+    shoot_image_draw_rect(&window.data->screen, pong_data.ball.ball_x, pong_data.ball.ball_y,
+        pong_data.ball.ball_x + ball_width, pong_data.ball.ball_y + ball_height, 1.0, 1.0, 1.0, 1.0);
+
+    shoot_image_draw_rect(&window.data->screen, 0, pong_data.player_one.bottom,
+                    player_width, pong_data.player_one.top, 1.0, 1.0, 1.0, 1.0);
+    shoot_image_draw_rect(&window.data->screen, SCREEN_WIDTH - player_width, pong_data.player_two.bottom,
+                    SCREEN_WIDTH, pong_data.player_two.top, 1.0, 1.0, 1.0, 1.0);
 }
 
 /** ------------ MENU ------------ **/
 
-static int32 mouseX, mouseY;
+struct shoot_player_cursor
+{
+    int32 mouseX, mouseY;
+    enum game_state state;
+};
+static struct shoot_player_cursor menu_player_one, menu_player_two;
 
 static bool32 pong_hovered, pong_held, server_open_hovered, server_open_held, connect_hovered, connect_held;
-enum ShootNetStatus {
-    SHOOT_NET_STATUS_OFFLINE,
-    SHOOT_NET_STATUS_OPEN_TO_LAN,
-    SHOOT_NET_STATUS_SEARCHING_FOR_CONNECTION,
-    SHOOT_NET_STATUS_CONNECTING,
-    SHOOT_NET_STATUS_CONNECTED,
-};
-static enum ShootNetStatus network_state;
-static bool32 network_setup;
 
 struct ShootRect pong_button = {20, 20, 60, 60};
 struct ShootRect server_open_button = {20, 120, 60, 160};
 struct ShootRect connect_button = {120, 120, 160, 160};
 
-static void shoot_button_update(struct ShootRect rect, bool32 *hovered, bool32 *held)
+static void shoot_button_update(struct ShootRect rect, struct shoot_player_cursor cursor, bool32 *hovered, bool32 *held)
 {
-    if (mouseX > rect.left && mouseY > rect.bottom && mouseX < rect.right && mouseY < rect.top)
+    if (cursor.mouseX > rect.left && cursor.mouseY > rect.bottom && cursor.mouseX < rect.right && cursor.mouseY < rect.top)
     {
         *hovered = TRUE;
         if (shoot_input_get(&window.data->input[0], MOUSE_BUTTON_LEFT)) { *held = TRUE; }
@@ -191,11 +239,12 @@ static void shoot_button_update(struct ShootRect rect, bool32 *hovered, bool32 *
         *held = FALSE;
     }
 }
-static void shoot_toggle_update(struct ShootRect rect, bool32 *hovered, bool32 *held, int32 *toggled, int32 new_toggle_state)
+static void shoot_toggle_update(struct ShootRect rect, struct shoot_player_cursor cursor, bool32 *hovered, bool32 *held,
+        int32 *toggled, int32 new_toggle_state)
 {
     if (*toggled) { return; }
 
-    if (mouseX > rect.left && mouseY > rect.bottom && mouseX < rect.right && mouseY < rect.top)
+    if (cursor.mouseX > rect.left && cursor.mouseY > rect.bottom && cursor.mouseX < rect.right && cursor.mouseY < rect.top)
     {
         *hovered = TRUE;
         if (shoot_input_get(&window.data->input[0], MOUSE_BUTTON_LEFT)) { *held = TRUE; }
@@ -216,16 +265,13 @@ static void menu_loop()
 {
     real mouseXDiv = (real)INT16_MAX / (real)SCREEN_WIDTH;
     real mouseYDiv = (real)INT16_MAX / (real)SCREEN_HEIGHT;
-    mouseX = (int16)((real)shoot_input_get(&window.data->input[0], MOUSE_X) / mouseXDiv);
-    mouseY = (int16)((real)shoot_input_get(&window.data->input[0], MOUSE_Y) / mouseYDiv);
+    menu_player_one.mouseX = (int16)((real)shoot_input_get(&window.data->input[0], MOUSE_X) / mouseXDiv);
+    menu_player_one.mouseY = (int16)((real)shoot_input_get(&window.data->input[0], MOUSE_Y) / mouseYDiv);
 
-    shoot_button_update(pong_button, &pong_hovered, &pong_held);
-    shoot_toggle_update(server_open_button, &server_open_hovered, &server_open_held, (int32 *)&network_state, SHOOT_NET_STATUS_OPEN_TO_LAN);
-    shoot_toggle_update(connect_button, &connect_hovered, &connect_held, (int32 *)&network_state, SHOOT_NET_STATUS_SEARCHING_FOR_CONNECTION);
+    shoot_button_update(pong_button, menu_player_one, &pong_hovered, &pong_held);
+    shoot_toggle_update(server_open_button, menu_player_one, &server_open_hovered, &server_open_held, (int32 *)&network_state, SHOOT_NET_STATUS_PLAYER_ONE);
+    shoot_toggle_update(connect_button, menu_player_one, &connect_hovered, &connect_held, (int32 *)&network_state, SHOOT_NET_STATUS_PLAYER_TWO);
 
-    if (shoot_input_get(&window.data->input[0], KEY_SPACE))
-        printf("%i - %i\n", window.data->input[0].currentState[MOUSE_BUTTON_LEFT], window.data->input[0].lastState[MOUSE_BUTTON_LEFT]);
-        
     if (pong_hovered && shoot_input_just_released(&window.data->input[0], MOUSE_BUTTON_LEFT))
     {
         state = GAME_STATE_PONG;
@@ -234,6 +280,47 @@ static void menu_loop()
     {
         NET_STARTUP
         network_setup = TRUE;
+
+        switch(network_state)
+        {
+            case SHOOT_NET_STATUS_PLAYER_ONE:
+            {
+                printf("connected to local area network as player one\n");
+                network_socket = shoot_net_open_listening_socket("127.0.0.1", "4444");
+                destination_socket = shoot_net_open_peer_socket("127.0.0.1", "4445", &peer_address);
+                
+                max_socket = MAX(network_socket, destination_socket);
+
+                FD_ZERO(&network_master_set);
+                FD_SET(network_socket, &network_master_set);
+            } break;
+            case SHOOT_NET_STATUS_PLAYER_TWO:
+            {
+                printf("connected to local area network as player two\n");
+                network_socket = shoot_net_open_listening_socket("127.0.0.1", "4445");
+                destination_socket = shoot_net_open_peer_socket("127.0.0.1", "4444", &peer_address);
+
+                max_socket = MAX(network_socket, destination_socket);
+
+                FD_ZERO(&network_master_set);
+                FD_SET(network_socket, &network_master_set);
+            } break;
+            default:
+                break;
+        }
+    }
+
+    if (network_state == SHOOT_NET_STATUS_PLAYER_ONE)
+    {
+        menu_player_one.state = state;
+        shoot_net_send(destination_socket, peer_address, &menu_player_two, sizeof(menu_player_two));
+        shoot_net_poll(network_socket, max_socket, &menu_player_two, sizeof(menu_player_two));
+    }
+    if (network_state == SHOOT_NET_STATUS_PLAYER_TWO)
+    {
+        menu_player_one.state = state;
+        shoot_net_send(destination_socket, peer_address, &menu_player_two, sizeof(menu_player_two));
+        shoot_net_poll(network_socket, max_socket, &menu_player_two, sizeof(menu_player_two));
     }
 }
 static void shoot_button_draw(struct ShootRect rect, real red, real green, real blue, bool32 hovered, bool32 held)
@@ -259,7 +346,13 @@ static void menu_render()
     shoot_toggle_draw(server_open_button, 0.4, 0.9, 0.8, server_open_hovered, server_open_held, network_state);
     shoot_toggle_draw(connect_button, 0.4, 0.8, 0.9, connect_hovered, connect_held, network_state);
 
-    shoot_image_draw_rect(&window.data->screen, mouseX - 5, mouseY - 5, mouseX + 5, mouseY + 5, 0.0, 0.0, 0.0, 1.0);
+    shoot_image_draw_rect(&window.data->screen, menu_player_one.mouseX - 5, menu_player_one.mouseY - 5,
+                        menu_player_one.mouseX + 5, menu_player_one.mouseY + 5, 0.0, 0.0, 0.0, 1.0);
+    if (menu_player_two.state == GAME_STATE_MENU)
+    {
+        shoot_image_draw_rect(&window.data->screen, menu_player_two.mouseX - 5, menu_player_two.mouseY - 5,
+                            menu_player_two.mouseX + 5, menu_player_two.mouseY + 5, 0.0, 0.0, 0.0, 1.0);
+    }
 }
 
 static bool32 game_loop()
@@ -324,7 +417,18 @@ int main()
 {
     shoot_check_compatibility();
 
-    window = shoot_window_setup(0);
+    struct ShootWindowData hints = {
+        .true_width = 1280,
+        .true_height = 720,
+        .pixel_width = SCREEN_WIDTH,
+        .pixel_height = SCREEN_HEIGHT,
+        .background_red = 255,
+        .background_green = 0,
+        .background_blue = 255,
+        .resize_function = shoot_opengl_resize_viewport,
+        .cursor_type = GLFW_CURSOR_HIDDEN,
+    };
+    window = shoot_window_setup(&hints);
     shoot_opengl_window_setup(&window);
     
 #ifdef __EMSCRIPTEN__

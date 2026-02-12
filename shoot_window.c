@@ -152,6 +152,7 @@ static struct ShootWindow shoot_window_setup(struct ShootWindowData *hints)
             .background_red = 255,
             .background_green = 0,
             .background_blue = 255,
+            .cursor_type = GLFW_CURSOR_HIDDEN,
         };
 
         hints = default_hints;
@@ -163,7 +164,12 @@ static struct ShootWindow shoot_window_setup(struct ShootWindowData *hints)
     glfwInit();
 
     window.data = hints;
+    if (window.data->resize_function == NULL)
+    {
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    }
     window.glfw_window_handle = glfwCreateWindow(hints->true_width, hints->true_height, "window", NULL, NULL);
+    glfwSetInputMode(window.glfw_window_handle, GLFW_CURSOR, window.data->cursor_type);
 
     glfwMakeContextCurrent(window.glfw_window_handle);
 
@@ -183,7 +189,7 @@ static void shoot_window_close(struct ShootWindow window)
     glfwSetWindowShouldClose((GLFWwindow *)window.glfw_window_handle, GLFW_TRUE);
 
     shoot_arena_free(window.memory);
-    free(window.memory);
+    if (window.memory) { free(window.memory); }
 }
 
 static bool32 shoot_window_is_open(struct ShootWindow window)

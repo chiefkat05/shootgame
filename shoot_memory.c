@@ -21,7 +21,7 @@ static void shoot_arena_alloc(struct ShootArena *arena, uint64 bytes)
 }
 static void shoot_arena_free(struct ShootArena *arena)
 {
-    free(arena->memory);
+    if (arena->memory) { free(arena->memory); }
 }
 
 static void shoot_copy(void *dest, void *src, uint64 bytes)

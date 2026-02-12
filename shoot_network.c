@@ -47,113 +47,96 @@
 #define NET_SHUTDOWN
 #endif
 
-static void netPrintAddressIP(struct sockaddr *address, socklen_t length)
-{
-    int err;
-    char address_buf[100], server_buf[100];
-    err = getnameinfo(address, length, address_buf, 100, server_buf, 100, NI_NUMERICHOST | NI_NUMERICSERV);
-    if (err != SUCCESS)
-    {
-        printf("address: [failed to get]\n");
-        return;
-    }
-    printf("address: %s/%s\n", address_buf, server_buf);
-}
-static void netPrintAddressInfoAddressIP(struct addrinfo *address)
-{
-    int err;
-    char address_buf[100], server_buf[100];
-    err = getnameinfo(address->ai_addr, address->ai_addrlen, address_buf, 100, server_buf, 100, NI_NUMERICHOST | NI_NUMERICSERV);
-    if (err != SUCCESS)
-    {
-        printf("address: [failed to get]\n");
-        return;
-    }
-    printf("address: %s/%s\n", address_buf, server_buf);
-}
-
-/** NOTE: Socket family is IPv4. Socket_type can be SOCK_STREAM for TCP or SOCK_DGRAM for UDP - chief */
-static SOCKET netConnect(const char *hostname, const char *port, int socket_type)
+static SOCKET shoot_net_open_listening_socket(const char *hostname, const char *port)
 {
     int error_code;
 
+    struct addrinfo *listening_address;
+
     struct addrinfo hints = {
         .ai_family = AF_INET,
-        .ai_socktype = socket_type,
+        .ai_socktype = SOCK_DGRAM,
     };
-
-    struct addrinfo *peer_address;
-    error_code = getaddrinfo(hostname, port, &hints, &peer_address);
+    error_code = getaddrinfo(hostname, port, &hints, &listening_address);
     verify(error_code == SUCCESS, "failed to get address info");
 
-    SOCKET host_socket = socket(peer_address->ai_family, peer_address->ai_socktype, peer_address->ai_protocol);
+    SOCKET host_socket = socket(listening_address->ai_family, listening_address->ai_socktype, listening_address->ai_protocol);
     verify(ISVALIDSOCKET(host_socket), "socket call failed for host_socket");
-    /* error_code = bind(host_socket, peer_address->ai_addr, peer_address->ai_addrlen);
-    verify(error_code == SUCCESS, "bind call failed for host_socket"); */
 
-    error_code = connect(host_socket, peer_address->ai_addr, peer_address->ai_addrlen);
-    verify(error_code == SUCCESS, "connect call failed for host_socket");
+    error_code = bind(host_socket, listening_address->ai_addr, listening_address->ai_addrlen);
+    if (error_code != SUCCESS)
+    {
+        printf("Network Error: Failed to bind address\n");
+        freeaddrinfo(listening_address);
+        return -1;
+    }
 
-    printf("successfully connected to ");
-    netPrintAddressInfoAddressIP(peer_address);
-
-    freeaddrinfo(peer_address);
+    printf("opened listening socket for receiving at ip %s\n", hostname);
+    freeaddrinfo(listening_address);
 
     return host_socket;
 }
-static SOCKET netListen(const char *port, uint32 connection_limit)
+static SOCKET shoot_net_open_peer_socket(const char *hostname, const char *port, struct addrinfo **peer_address)
 {
     int error_code;
 
+    if (peer_address == NULL)
+    {
+        printf("please include a pointer to a (struct addrinfo *) object\n");
+        return -1;
+    }
+
     struct addrinfo hints = {
-        .ai_socktype = SOCK_STREAM,
-        .ai_flags = AI_PASSIVE,
         .ai_family = AF_INET,
+        .ai_socktype = SOCK_DGRAM,
     };
-    struct addrinfo *peer_address;
-    error_code = getaddrinfo(0, port, &hints, &peer_address);
+    error_code = getaddrinfo(hostname, port, &hints, peer_address);
     verify(error_code == SUCCESS, "failed to get address info");
 
-    SOCKET listening_socket = socket(peer_address->ai_family, peer_address->ai_socktype, peer_address->ai_protocol);
-    verify(ISVALIDSOCKET(listening_socket), "failed to create socket");
+    SOCKET peer_socket = socket((*peer_address)->ai_family, (*peer_address)->ai_socktype, (*peer_address)->ai_protocol);
+    verify(ISVALIDSOCKET(peer_socket), "socket call failed for peer_socket");
 
-    error_code = bind(listening_socket, peer_address->ai_addr, peer_address->ai_addrlen);
-    verify(error_code == SUCCESS, "bind() failure");
+    printf("opened peer socket for sending to ip %s\n", hostname);
 
-    freeaddrinfo(peer_address);
-
-    error_code = listen(listening_socket, connection_limit);
-    verify(error_code >= 0, "listen() failure");
-
-    printf("listening on port %s...\n", port);
-
-    return listening_socket;
+    return peer_socket;
 }
-
-static SOCKET netAccept(int socket_listen)
+static void shoot_net_receive(SOCKET host_socket, struct sockaddr *return_address, socklen_t *return_length, void *data_out, uint64 data_length)
 {
-    struct sockaddr_storage client_address;
-    socklen_t client_length = sizeof(client_address);
-    SOCKET client_socket = accept(socket_listen, (struct sockaddr *)&client_address, &client_length);
-    verify(ISVALIDSOCKET(client_socket), "failed to accept() client socket");
+    int bytes_received = recvfrom(host_socket, data_out, data_length, 0, return_address, return_length);
+    if (bytes_received < 1)
+    {
+        printf("failed to receive data to peer\n");
+    }
 
-    printf("connected with client: ");
-    netPrintAddressIP((struct sockaddr *)&client_address, client_length);
+    printf("received %lu bytes of data\n", data_length);
+}
+static void shoot_net_send(SOCKET peer_socket, struct addrinfo *peer_address, void *data, uint64 data_length)
+{
+    uint64 bytes_sent = sendto(peer_socket, data, data_length, 0, peer_address->ai_addr, peer_address->ai_addrlen);
+    if (bytes_sent < 1)
+    {
+        printf("failed to sent data to peer\n");
+    }
 
-    return client_socket;
+    printf("sent %lu bytes of data\n", data_length);
 }
 
-/* NET UDP FUNCTIONS */
-// netServer()
-//      netServerBroadcastIP()
-//      netServerListenAndAccept()
-//      netServerSend()
-//      netServerReceive()
+static void shoot_net_poll(SOCKET listening_socket, SOCKET max_socket, void *out_data, uint64 out_data_length)
+{
+    fd_set read_set;
 
-// netClient()
-//      netClientConnect()
-//      netClientSend()
-//      netClientReceive()
+    FD_ZERO(&read_set);
+    FD_SET(listening_socket, &read_set);
+
+    /** Unless doing multithreading, please never set this to anything greater than 0. - chief **/
+    struct timeval wait_timer = {.tv_sec = 0, .tv_usec = 0};
+    verify(select(max_socket + 1, &read_set, 0, 0, &wait_timer) >= 0, "select() failure");
+
+    if (FD_ISSET(listening_socket, &read_set))
+    {
+        shoot_net_receive(listening_socket, 0, 0, out_data, out_data_length);
+    }
+}
 
 typedef struct addrinfo AddressInfo;
 

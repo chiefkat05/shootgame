@@ -124,6 +124,8 @@ struct ShootWindowData
     RESIZE_FUNCTION_POINTER(resize_function);
 
     real accumulated_time, current_time;
+
+    uint32 cursor_type;
 };
 
 struct ShootWindow
