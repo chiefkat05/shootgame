@@ -107,8 +107,6 @@ static void shoot_net_receive(SOCKET host_socket, struct sockaddr *return_addres
     {
         printf("failed to receive data to peer\n");
     }
-
-    printf("received %lu bytes of data\n", data_length);
 }
 static void shoot_net_send(SOCKET peer_socket, struct addrinfo *peer_address, void *data, uint64 data_length)
 {
@@ -117,11 +115,11 @@ static void shoot_net_send(SOCKET peer_socket, struct addrinfo *peer_address, vo
     {
         printf("failed to sent data to peer\n");
     }
-
-    printf("sent %lu bytes of data\n", data_length);
 }
 
-static void shoot_net_poll(SOCKET listening_socket, SOCKET max_socket, void *out_data, uint64 out_data_length)
+/** Keep updating this untill you're happy with it, e.g. maybe the header can include some data information or something. - Chief **/
+static void shoot_net_poll(SOCKET listening_socket, SOCKET max_socket,
+    void *out_data, uint64 out_data_length)
 {
     fd_set read_set;
 
