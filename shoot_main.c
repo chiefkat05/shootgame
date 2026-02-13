@@ -15,7 +15,6 @@
  * 
  * TODO: basic audio thing with openal??? (follow online tutorial lol and decide on what the demo thing is (probably constant looping music))
  * 
- * TODOB: implement edge case where two players are connected but only one is in pong
  * TODOC: implement broadcast message when joining as player 1 or 2, and store the ip address, setting the destination socket to that.
  * TODOD: test cross-computers
  * 
@@ -60,37 +59,65 @@ enum ShootNetStatus {
     SHOOT_NET_STATUS_PLAYER_TWO,
 };
 
-static enum ShootNetStatus network_state;
-static bool32 network_setup;
-fd_set network_master_set;
-SOCKET network_socket, destination_socket, max_socket;
-struct addrinfo *peer_address;
+#define SHOOT_NET_BROADCAST_ADDRESS "0.0.0.0"
+#define SHOOT_NET_PLAYER_ONE_PORT "4444"
+#define SHOOT_NET_PLAYER_TWO_PORT "4445"
+#define SHOOT_NET_HEADER_ID "SHOOT"
+struct ShootNetHeader {
+    char ID[5];
+    char hostname[128], port[32];
+    enum ShootGameState state;
+    bool32 was_here_first;
+};
 
-// struct ShootNetHeader {
-//     enum ShootGameState state;
-// };
+static enum ShootNetStatus network_state;
+static bool32 network_setup, network_up_to_date_with_peers;
+fd_set network_master_set;
+SOCKET network_socket, destination_socket = -1, max_socket;
+struct addrinfo *network_address, *peer_address;
+
+static void shoot_game_change_state(enum ShootGameState new_state)
+{
+    state = new_state;
+
+    if (network_state != SHOOT_NET_STATUS_OFFLINE)
+    {
+        network_up_to_date_with_peers = FALSE;
+    }
+}
+static struct ShootNetHeader shoot_net_make_send_header()
+{
+    char hostname_buffer[128], port_buffer[32];
+    shoot_net_get_address_ip(network_address, hostname_buffer, 128, port_buffer, 32);
+
+    struct ShootNetHeader send_header = { .ID = SHOOT_NET_HEADER_ID, .state = state };
+    strcpy(send_header.hostname, hostname_buffer);
+    strcpy(send_header.port, port_buffer);
+        
+    return send_header;
+}
 
 /** ------------ PONG ------------ **/
 
 static const real ball_width = 10.0, ball_height = 10.0, ball_speed = 50.0;
 static const real player_height = 40.0, player_width = 10.0, player_speed = 200.0;
 
-struct shoot_pong_player
+struct ShootPongPlayer
 {
     real bottom, top;
 };
-struct shoot_pong_ball
+struct ShootPongBall
 {
     real ball_x, ball_y;
     real ball_x_direction, ball_y_direction;
 };
 
-struct shoot_pong_game_data
+struct ShootPongGameData
 {
-    struct shoot_pong_player player_one, player_two;
-    struct shoot_pong_ball ball;
+    struct ShootPongPlayer player_one, player_two;
+    struct ShootPongBall ball;
 };
-static struct shoot_pong_game_data pong_data = {
+static struct ShootPongGameData pong_data = {
     .player_one = {.bottom = 0.0, .top = player_height},
     .player_two = {.bottom = 0.0, .top = player_height},
     .ball = {.ball_x = SCREEN_WIDTH / 2, .ball_y = SCREEN_HEIGHT / 2,
@@ -173,24 +200,69 @@ static void pong_loop()
         pong_data.player_two.bottom = pong_data.player_two.top - player_height;
     }
 
-    
     if (network_state == SHOOT_NET_STATUS_PLAYER_ONE)
     {
-        struct shoot_pong_game_data temp_pong_data = {};
-        shoot_net_poll(network_socket, max_socket, &temp_pong_data, sizeof(temp_pong_data));
+        struct ShootPongGameData peer_pong_data = {};
+        struct ShootNetHeader peer_header = {};
+        shoot_net_poll(network_socket, max_socket, &peer_header, sizeof(peer_header));
+        shoot_net_poll(network_socket, max_socket, &peer_pong_data, sizeof(peer_pong_data));
 
-        pong_data.player_two = temp_pong_data.player_two;
+        if (shoot_is_string_equal(peer_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1) && peer_header.state == GAME_STATE_PONG)
+        {
+            if (peer_header.was_here_first && !network_up_to_date_with_peers)
+            {
+                printf("other player was here first\n");
+                pong_data = peer_pong_data;
+                network_up_to_date_with_peers = TRUE;
+            }
+            else
+            {
+                pong_data.player_two = peer_pong_data.player_two;
+            }
+        }
 
+        struct ShootNetHeader send_header = { .ID = SHOOT_NET_HEADER_ID, .state = state,
+            .was_here_first = !(peer_header.was_here_first) };
+
+        if (send_header.was_here_first)
+        {
+            network_up_to_date_with_peers = TRUE;
+        }
+
+        shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
         shoot_net_send(destination_socket, peer_address, &pong_data, sizeof(pong_data));
     }
     if (network_state == SHOOT_NET_STATUS_PLAYER_TWO)
     {
-        struct shoot_pong_game_data temp_pong_data = {};
-        shoot_net_poll(network_socket, max_socket, &temp_pong_data, sizeof(temp_pong_data));
+        struct ShootPongGameData peer_pong_data = {};
+        struct ShootNetHeader peer_header = {};
+        shoot_net_poll(network_socket, max_socket, &peer_header, sizeof(peer_header));
+        shoot_net_poll(network_socket, max_socket, &peer_pong_data, sizeof(peer_pong_data));
 
-        pong_data.ball = temp_pong_data.ball;
-        pong_data.player_one = temp_pong_data.player_one;
+        if (shoot_is_string_equal(peer_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1) && peer_header.state == GAME_STATE_PONG)
+        {
+            if (peer_header.was_here_first && !network_up_to_date_with_peers)
+            {
+                printf("other player was here first\n");
+                pong_data = peer_pong_data;
+                network_up_to_date_with_peers = TRUE;
+            }
+            else
+            {
+                pong_data.ball = peer_pong_data.ball;
+                pong_data.player_one = peer_pong_data.player_one;
+            }
+        }
 
+        struct ShootNetHeader send_header = { .ID = SHOOT_NET_HEADER_ID, .state = state,
+            .was_here_first = !(peer_header.was_here_first) };
+
+        if (send_header.was_here_first)
+        {
+            network_up_to_date_with_peers = TRUE;
+        }
+
+        shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
         shoot_net_send(destination_socket, peer_address, &pong_data, sizeof(pong_data));
     }
 }
@@ -209,11 +281,11 @@ static void pong_render()
 
 /** ------------ MENU ------------ **/
 
-struct shoot_player_cursor
+struct ShootPlayerCursor
 {
     int32 mouseX, mouseY;
 };
-static struct shoot_player_cursor menu_player_one, menu_player_two;
+static struct ShootPlayerCursor menu_player_one, menu_player_two;
 
 static bool32 pong_hovered, pong_held, server_open_hovered, server_open_held, connect_hovered, connect_held;
 
@@ -221,7 +293,7 @@ struct ShootRect pong_button = {20, 20, 60, 60};
 struct ShootRect server_open_button = {20, 120, 60, 160};
 struct ShootRect connect_button = {120, 120, 160, 160};
 
-static void shoot_button_update(struct ShootRect rect, struct shoot_player_cursor cursor, bool32 *hovered, bool32 *held)
+static void shoot_button_update(struct ShootRect rect, struct ShootPlayerCursor cursor, bool32 *hovered, bool32 *held)
 {
     if (cursor.mouseX > rect.left && cursor.mouseY > rect.bottom && cursor.mouseX < rect.right && cursor.mouseY < rect.top)
     {
@@ -235,7 +307,7 @@ static void shoot_button_update(struct ShootRect rect, struct shoot_player_curso
         *held = FALSE;
     }
 }
-static void shoot_toggle_update(struct ShootRect rect, struct shoot_player_cursor cursor, bool32 *hovered, bool32 *held,
+static void shoot_toggle_update(struct ShootRect rect, struct ShootPlayerCursor cursor, bool32 *hovered, bool32 *held,
         int32 *toggled, int32 new_toggle_state)
 {
     if (*toggled) { return; }
@@ -287,7 +359,7 @@ static void menu_loop()
 
     if (pong_hovered && shoot_input_just_released(&window.data->input[0], MOUSE_BUTTON_LEFT))
     {
-        state = GAME_STATE_PONG;
+        shoot_game_change_state(GAME_STATE_PONG);
     }
     if (network_state && !network_setup)
     {
@@ -298,22 +370,44 @@ static void menu_loop()
         {
             case SHOOT_NET_STATUS_PLAYER_ONE:
             {
-                printf("connected to local area network as player one\n");
-                network_socket = shoot_net_open_listening_socket("127.0.0.1", "4444");
-                destination_socket = shoot_net_open_peer_socket("127.0.0.1", "4445", &peer_address);
-                
-                max_socket = MAX(network_socket, destination_socket);
+                printf("connecting to local area network as player one\n");
+                network_socket = shoot_net_open_listening_socket(0, SHOOT_NET_PLAYER_ONE_PORT, &network_address);
+
+                struct ShootNetHeader send_header = shoot_net_make_send_header();
+                shoot_net_broadcast(SHOOT_NET_BROADCAST_ADDRESS, SHOOT_NET_PLAYER_TWO_PORT, &send_header, sizeof(send_header));
+
+                if (!ISVALIDSOCKET(network_socket))
+                {
+                    printf("Failed to join local network as player one, that player probably already exists.\n");
+                    network_state = SHOOT_NET_STATUS_OFFLINE;
+                    NET_SHUTDOWN;
+                    network_setup = FALSE;
+                    break;
+                }
+
+                max_socket = network_socket;
 
                 FD_ZERO(&network_master_set);
                 FD_SET(network_socket, &network_master_set);
             } break;
             case SHOOT_NET_STATUS_PLAYER_TWO:
             {
-                printf("connected to local area network as player two\n");
-                network_socket = shoot_net_open_listening_socket("127.0.0.1", "4445");
-                destination_socket = shoot_net_open_peer_socket("127.0.0.1", "4444", &peer_address);
+                printf("connecting to local area network as player two\n");
+                network_socket = shoot_net_open_listening_socket(0, SHOOT_NET_PLAYER_TWO_PORT, &network_address);
 
-                max_socket = MAX(network_socket, destination_socket);
+                struct ShootNetHeader send_header = shoot_net_make_send_header();
+                shoot_net_broadcast(SHOOT_NET_BROADCAST_ADDRESS, SHOOT_NET_PLAYER_ONE_PORT, &send_header, sizeof(send_header));
+                
+                if (!ISVALIDSOCKET(network_socket))
+                {
+                    printf("Failed to join local network as player two, that player probably already exists.\n");
+                    network_state = SHOOT_NET_STATUS_OFFLINE;
+                    NET_SHUTDOWN;
+                    network_setup = FALSE;
+                    break;
+                }
+
+                max_socket = network_socket;
 
                 FD_ZERO(&network_master_set);
                 FD_SET(network_socket, &network_master_set);
@@ -323,17 +417,61 @@ static void menu_loop()
         }
     }
 
+    static int counter = 0;
+    ++counter;
     if (network_state == SHOOT_NET_STATUS_PLAYER_ONE)
     {
-        shoot_net_poll(network_socket, max_socket, &menu_player_two, sizeof(menu_player_two));
+        struct ShootNetHeader temp_header = {};
+        struct ShootPlayerCursor temp_cursor = {};
+        shoot_net_poll(network_socket, max_socket, &temp_header, sizeof(temp_header));
+        bool32 cursor_exists = shoot_net_poll(network_socket, max_socket, &temp_cursor, sizeof(temp_cursor));
 
-        shoot_net_send(destination_socket, peer_address, &menu_player_one, sizeof(menu_player_one));
+        if (shoot_is_string_equal(temp_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1))
+        {
+            if (!ISVALIDSOCKET(destination_socket))
+            {
+                destination_socket = shoot_net_open_peer_socket(temp_header.hostname, temp_header.port, &peer_address);
+                printf("connection established with peer %s %s\n", temp_header.hostname, temp_header.port);
+            }
+            
+            if (cursor_exists)
+            {
+                menu_player_two = temp_cursor;
+            }
+        }
+        if (ISVALIDSOCKET(destination_socket))
+        {
+            struct ShootNetHeader send_header = shoot_net_make_send_header();
+            shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
+            shoot_net_send(destination_socket, peer_address, &menu_player_one, sizeof(menu_player_one));
+        }
     }
     if (network_state == SHOOT_NET_STATUS_PLAYER_TWO)
     {
-        shoot_net_poll(network_socket, max_socket, &menu_player_one, sizeof(menu_player_one));
+        struct ShootNetHeader temp_header = {};
+        struct ShootPlayerCursor temp_cursor = {};
+        shoot_net_poll(network_socket, max_socket, &temp_header, sizeof(temp_header));
+        bool32 cursor_exists = shoot_net_poll(network_socket, max_socket, &temp_cursor, sizeof(temp_cursor));
 
-        shoot_net_send(destination_socket, peer_address, &menu_player_two, sizeof(menu_player_two));
+        if (shoot_is_string_equal(temp_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1))
+        {
+            if (!ISVALIDSOCKET(destination_socket))
+            {
+                destination_socket = shoot_net_open_peer_socket(temp_header.hostname, temp_header.port, &peer_address);
+                printf("connection established with peer %s %s\n", temp_header.hostname, temp_header.port);
+            }
+
+            if (cursor_exists)
+            {
+                menu_player_one = temp_cursor;
+            }
+        }
+        if (ISVALIDSOCKET(destination_socket))
+        {
+            struct ShootNetHeader send_header = shoot_net_make_send_header();
+            shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
+            shoot_net_send(destination_socket, peer_address, &menu_player_two, sizeof(menu_player_two));
+        }
     }
 }
 static void shoot_button_draw(struct ShootRect rect, real red, real green, real blue, bool32 hovered, bool32 held)
@@ -384,7 +522,7 @@ static bool32 game_loop()
 {
     if (shoot_input_just_released(&window.data->input[0], KEY_ESC))
     {
-        state = GAME_STATE_MENU;
+        shoot_game_change_state(GAME_STATE_MENU);
     }
     switch(state)
     {
@@ -443,8 +581,8 @@ int main()
     shoot_check_compatibility();
 
     struct ShootWindowData hints = {
-        .true_width = 1280,
-        .true_height = 720,
+        .true_width = 512,
+        .true_height = 512,
         .pixel_width = SCREEN_WIDTH,
         .pixel_height = SCREEN_HEIGHT,
         .background_red = 255,
