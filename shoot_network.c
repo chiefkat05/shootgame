@@ -93,7 +93,10 @@ static void shoot_net_send(SOCKET peer_socket, struct addrinfo *peer_address, vo
     {
         printf("failed to sent data to peer\n");
     }
-    printf("sent %lu bytes of data to peer\n", bytes_sent);
+
+    char hostname[100], port[100];
+    getnameinfo(peer_address->ai_addr, peer_address->ai_addrlen, hostname, sizeof(hostname), port, sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV);
+    printf("sent %lu bytes of data to peer at %s %s\n", bytes_sent, hostname, port);
 }
 
 /** Keep updating this untill you're happy with it, e.g. maybe the header can include some data information or something. - Chief **/
