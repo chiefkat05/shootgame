@@ -51,7 +51,7 @@ static void shoot_net_broadcast(const char *hostname, const char *port, void *da
         printf("Network Error: Failed to broadcast message\n");
     }
 
-    printf("broadcasting existance to local area network\n");
+    printf("broadcasting existance to local area network using hostname and port %s %s\n", hostname, port);
 }
 static SOCKET shoot_net_open_peer_socket(const char *hostname, const char *port, struct addrinfo **peer_address)
 {

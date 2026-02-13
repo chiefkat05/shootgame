@@ -77,6 +77,7 @@ static bool32 network_setup, network_up_to_date_with_peers;
 fd_set network_master_set;
 SOCKET network_socket, destination_socket = -1, max_socket;
 struct addrinfo *network_address, *peer_address;
+char broadcast_address[100];
 
 static void shoot_game_change_state(enum ShootGameState new_state)
 {
@@ -376,7 +377,7 @@ static void menu_loop()
                 network_socket = shoot_net_open_listening_socket(0, SHOOT_NET_PLAYER_ONE_PORT, &network_address);
 
                 struct ShootNetHeader send_header = shoot_net_make_send_header();
-                shoot_net_broadcast(SHOOT_NET_BROADCAST_ADDRESS, SHOOT_NET_PLAYER_TWO_PORT, &send_header, sizeof(send_header));
+                shoot_net_broadcast(broadcast_address, SHOOT_NET_PLAYER_TWO_PORT, &send_header, sizeof(send_header));
 
                 if (!ISVALIDSOCKET(network_socket))
                 {
@@ -398,7 +399,7 @@ static void menu_loop()
                 network_socket = shoot_net_open_listening_socket(0, SHOOT_NET_PLAYER_TWO_PORT, &network_address);
 
                 struct ShootNetHeader send_header = shoot_net_make_send_header();
-                shoot_net_broadcast(SHOOT_NET_BROADCAST_ADDRESS, SHOOT_NET_PLAYER_ONE_PORT, &send_header, sizeof(send_header));
+                shoot_net_broadcast(broadcast_address, SHOOT_NET_PLAYER_ONE_PORT, &send_header, sizeof(send_header));
                 
                 if (!ISVALIDSOCKET(network_socket))
                 {
@@ -585,8 +586,13 @@ static void main_loop()
     shoot_window_poll_events(window);
 }
 
-int main()
+int main(int argc, char *argv[])
 {
+    strcpy(broadcast_address, SHOOT_NET_BROADCAST_ADDRESS);
+    if (argc >= 2)
+    {
+        strcpy(broadcast_address, argv[1]);
+    }
     shoot_check_compatibility();
 
     struct ShootWindowData hints = {
