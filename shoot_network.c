@@ -41,8 +41,8 @@ static void shoot_net_broadcast(const char *hostname, const char *port, void *da
     verify(error_code == SUCCESS, "failed to get address info");
 
     SOCKET broadcast_socket = socket(broadcast_address->ai_family, broadcast_address->ai_socktype, broadcast_address->ai_protocol);
-    int option = 1;
-    setsockopt(broadcast_socket, SOL_SOCKET, SO_BROADCAST, &option, sizeof(option));
+    // int option = 1;
+    // setsockopt(broadcast_socket, SOL_SOCKET, SO_BROADCAST, &option, sizeof(option));
     verify(ISVALIDSOCKET(broadcast_socket), "socket call failed for broadcast_socket");
 
     int64 bytes_sent = sendto(broadcast_socket, data, data_length, 0, broadcast_address->ai_addr, broadcast_address->ai_addrlen);
