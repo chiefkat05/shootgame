@@ -114,6 +114,7 @@ static bool32 shoot_net_poll(SOCKET listening_socket, SOCKET max_socket,
 
     if (FD_ISSET(listening_socket, &read_set))
     {
+        printf("received data from peer\n");
         struct sockaddr_storage peer_socket_address;
         uint32 peer_socket_address_length;
         shoot_net_receive(listening_socket, (struct sockaddr *)&peer_socket_address, &peer_socket_address_length, out_data, out_data_length);

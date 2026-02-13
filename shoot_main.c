@@ -375,8 +375,9 @@ static void menu_loop()
                 printf("connecting to local area network as player one\n");
                 network_socket = shoot_net_open_listening_socket(0, SHOOT_NET_PORT, &network_address);
 
-                struct ShootNetHeader send_header = shoot_net_make_send_header();
-                shoot_net_broadcast(broadcast_address, SHOOT_NET_PORT, &send_header, sizeof(send_header));
+                // struct ShootNetHeader send_header = shoot_net_make_send_header();
+                destination_socket = shoot_net_open_peer_socket(broadcast_address, SHOOT_NET_PORT, &peer_address);
+                // shoot_net_broadcast(broadcast_address, SHOOT_NET_PORT, &send_header, sizeof(send_header));
 
                 if (!ISVALIDSOCKET(network_socket))
                 {
@@ -397,8 +398,9 @@ static void menu_loop()
                 printf("connecting to local area network as player two\n");
                 network_socket = shoot_net_open_listening_socket(0, SHOOT_NET_PORT, &network_address);
 
-                struct ShootNetHeader send_header = shoot_net_make_send_header();
-                shoot_net_broadcast(broadcast_address, SHOOT_NET_PORT, &send_header, sizeof(send_header));
+                // struct ShootNetHeader send_header = shoot_net_make_send_header();
+                destination_socket = shoot_net_open_peer_socket(broadcast_address, SHOOT_NET_PORT, &peer_address);
+                // shoot_net_broadcast(broadcast_address, SHOOT_NET_PORT, &send_header, sizeof(send_header));
                 
                 if (!ISVALIDSOCKET(network_socket))
                 {
@@ -429,7 +431,6 @@ static void menu_loop()
         char temp_hostname[128], temp_port[32];
         shoot_net_poll(network_socket, max_socket, &temp_header, sizeof(temp_header), temp_hostname, 128, temp_port, 32);
         bool32 cursor_exists = shoot_net_poll(network_socket, max_socket, &temp_cursor, sizeof(temp_cursor), 0, 0, 0, 0);
-
 
         if (shoot_is_string_equal(temp_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1))
         {
