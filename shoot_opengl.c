@@ -2,12 +2,12 @@
 #define CHIEFKAT_OPENGL_H
 
 #include "shoot.h"
-#include <GL/glew.h>
+#include "nms/glad.h"
 
 /** NOTE: Be sure to call shoot_window_setup() first in order to prepare the opengl context. - chief **/
 static void shoot_opengl_window_setup(struct ShootWindow *window)
 {
-    glewInit();
+    gladLoadGL();
 
     shoot_opengl_resize_viewport(window->data->true_width, window->data->true_height, window->data->pixel_width, window->data->pixel_height);
 

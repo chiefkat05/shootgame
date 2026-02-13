@@ -7,6 +7,8 @@
  *          for some other reason. Be aware of this possibility when seeing that error since it's the most vaguely worded error to ever exist
  *          and I don't want to spend ages looking for the issue again.
  * 
+ * TODO: build glad.c into wasm object with emscripten so you can link it in build_web and build_game
+ * 
  * TODO: take out all dependancy on SCREEN_WIDTH & SCREEN_HEIGHT, replace with change-able values
  * 
  * TODO: add basic text glyph support using the font that you made for snakegame
