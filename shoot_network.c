@@ -11,6 +11,7 @@ static SOCKET shoot_net_open_listening_socket(const char *hostname, const char *
     struct addrinfo hints = {
         .ai_family = AF_INET,
         .ai_socktype = SOCK_DGRAM,
+        .ai_flags = AI_PASSIVE,
     };
     error_code = getaddrinfo(hostname, port, &hints, listening_address);
     verify(error_code == SUCCESS, "failed to get address info");
@@ -101,7 +102,7 @@ static void shoot_net_send(SOCKET peer_socket, struct addrinfo *peer_address, vo
 
 /** Keep updating this untill you're happy with it, e.g. maybe the header can include some data information or something. - Chief **/
 static bool32 shoot_net_poll(SOCKET listening_socket, SOCKET max_socket,
-    void *out_data, uint64 out_data_length)
+    void *out_data, uint64 out_data_length, struct sockaddr *out_socket_address, socklen_t *out_socket_address_length)
 {
     fd_set read_set;
 
@@ -114,9 +115,7 @@ static bool32 shoot_net_poll(SOCKET listening_socket, SOCKET max_socket,
 
     if (FD_ISSET(listening_socket, &read_set))
     {
-        struct sockaddr_storage peer_socket_address;
-        uint32 peer_socket_address_length;
-        shoot_net_receive(listening_socket, (struct sockaddr *)&peer_socket_address, &peer_socket_address_length, out_data, out_data_length);
+        shoot_net_receive(listening_socket, out_socket_address, out_socket_address_length, out_data, out_data_length);
 
         return TRUE;
     }

@@ -207,8 +207,8 @@ static void pong_loop()
     {
         struct ShootPongGameData peer_pong_data = {};
         struct ShootNetHeader peer_header = {};
-        shoot_net_poll(network_socket, max_socket, &peer_header, sizeof(peer_header));
-        shoot_net_poll(network_socket, max_socket, &peer_pong_data, sizeof(peer_pong_data));
+        shoot_net_poll(network_socket, max_socket, &peer_header, sizeof(peer_header), 0, 0);
+        shoot_net_poll(network_socket, max_socket, &peer_pong_data, sizeof(peer_pong_data), 0, 0);
 
         if (shoot_is_string_equal(peer_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1) && peer_header.state == GAME_STATE_PONG)
         {
@@ -239,8 +239,8 @@ static void pong_loop()
     {
         struct ShootPongGameData peer_pong_data = {};
         struct ShootNetHeader peer_header = {};
-        shoot_net_poll(network_socket, max_socket, &peer_header, sizeof(peer_header));
-        shoot_net_poll(network_socket, max_socket, &peer_pong_data, sizeof(peer_pong_data));
+        shoot_net_poll(network_socket, max_socket, &peer_header, sizeof(peer_header), 0, 0);
+        shoot_net_poll(network_socket, max_socket, &peer_pong_data, sizeof(peer_pong_data), 0, 0);
 
         if (shoot_is_string_equal(peer_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1) && peer_header.state == GAME_STATE_PONG)
         {
@@ -384,15 +384,8 @@ static void menu_loop()
                     break;
                 }
                 
-                destination_socket = shoot_net_open_peer_socket(broadcast_address, SHOOT_NET_PORT_P2, &peer_address);
-                if (!ISVALIDSOCKET(destination_socket))
-                {
-                    printf("failed to open peer connection with broadcast address\n");
-                    network_state = SHOOT_NET_STATUS_OFFLINE;
-                    NET_SHUTDOWN;
-                    network_setup = FALSE;
-                    break;
-                }
+                struct ShootNetHeader send_header = shoot_net_make_send_header();
+                shoot_net_broadcast(broadcast_address, SHOOT_NET_PORT_P2, &send_header, sizeof(send_header));
 
                 max_socket = network_socket;
 
@@ -413,15 +406,8 @@ static void menu_loop()
                     break;
                 }
 
-                destination_socket = shoot_net_open_peer_socket(broadcast_address, SHOOT_NET_PORT, &peer_address);
-                if (!ISVALIDSOCKET(destination_socket))
-                {
-                    printf("failed to open peer connection with broadcast address\n");
-                    network_state = SHOOT_NET_STATUS_OFFLINE;
-                    NET_SHUTDOWN;
-                    network_setup = FALSE;
-                    break;
-                }
+                struct ShootNetHeader send_header = shoot_net_make_send_header();
+                shoot_net_broadcast(broadcast_address, SHOOT_NET_PORT, &send_header, sizeof(send_header));
 
                 max_socket = network_socket;
 
@@ -439,9 +425,11 @@ static void menu_loop()
     {
         struct ShootNetHeader temp_header = {};
         struct ShootPlayerCursor temp_cursor = {};
-
-        shoot_net_poll(network_socket, max_socket, &temp_header, sizeof(temp_header));
-        bool32 cursor_exists = shoot_net_poll(network_socket, max_socket, &temp_cursor, sizeof(temp_cursor));
+        struct sockaddr_storage temp_socket_address;
+        socklen_t temp_socket_address_length = sizeof(temp_socket_address);
+        shoot_net_poll(network_socket, max_socket, &temp_header, sizeof(temp_header),
+            (struct sockaddr *)&temp_socket_address, &temp_socket_address_length);
+        bool32 cursor_exists = shoot_net_poll(network_socket, max_socket, &temp_cursor, sizeof(temp_cursor), 0, 0);
 
         if (shoot_is_string_equal(temp_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1))
         {
@@ -456,14 +444,23 @@ static void menu_loop()
             shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
             shoot_net_send(destination_socket, peer_address, &menu_player_one, sizeof(menu_player_one));
         }
+        else
+        {
+            char hostname_buffer[100], port_buffer[100];
+            shoot_net_get_socket_address_ip((struct sockaddr *)&temp_socket_address, temp_socket_address_length,
+                hostname_buffer, sizeof(hostname_buffer), port_buffer, sizeof(port_buffer));
+            destination_socket = shoot_net_open_peer_socket(broadcast_address, SHOOT_NET_PORT_P2, &peer_address);
+        }
     }
     if (network_state == SHOOT_NET_STATUS_PLAYER_TWO)
     {
         struct ShootNetHeader temp_header = {};
         struct ShootPlayerCursor temp_cursor = {};
-
-        shoot_net_poll(network_socket, max_socket, &temp_header, sizeof(temp_header));
-        bool32 cursor_exists = shoot_net_poll(network_socket, max_socket, &temp_cursor, sizeof(temp_cursor));
+        struct sockaddr_storage temp_socket_address;
+        socklen_t temp_socket_address_length = sizeof(temp_socket_address);
+        shoot_net_poll(network_socket, max_socket, &temp_header, sizeof(temp_header), 
+                (struct sockaddr *)&temp_socket_address, &temp_socket_address_length);
+        bool32 cursor_exists = shoot_net_poll(network_socket, max_socket, &temp_cursor, sizeof(temp_cursor), 0, 0);
 
         if (shoot_is_string_equal(temp_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1))
         {
@@ -477,6 +474,13 @@ static void menu_loop()
             struct ShootNetHeader send_header = shoot_net_make_send_header();
             shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
             shoot_net_send(destination_socket, peer_address, &menu_player_two, sizeof(menu_player_two));
+        }
+        else
+        {
+            char hostname_buffer[100], port_buffer[100];
+            shoot_net_get_socket_address_ip((struct sockaddr *)&temp_socket_address, temp_socket_address_length,
+                hostname_buffer, sizeof(hostname_buffer), port_buffer, sizeof(port_buffer));
+            destination_socket = shoot_net_open_peer_socket(broadcast_address, SHOOT_NET_PORT, &peer_address);
         }
     }
 }
