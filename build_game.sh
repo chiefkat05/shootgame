@@ -1,6 +1,6 @@
 echo 'building for RELEASE'
 
-gcc shoot_main.c -o BUILD_LINUX/shoot -DGLEW_STATIC -lglfw -lGLEW -lGL -lportaudio -Ofast
+gcc shoot_main.c -o BUILD_LINUX/shoot -DGLEW_STATIC -l:libglfw3.a -lGLEW -lGL -lm -Ofast
 cp -r gfx BUILD_LINUX/gfx
 cp -r lvl BUILD_LINUX/lvl
 cp -r sav BUILD_LINUX/sav
