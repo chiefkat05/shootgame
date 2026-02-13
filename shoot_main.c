@@ -207,8 +207,8 @@ static void pong_loop()
     {
         struct ShootPongGameData peer_pong_data = {};
         struct ShootNetHeader peer_header = {};
-        shoot_net_poll(network_socket, max_socket, &peer_header, sizeof(peer_header), 0, 0, 0, 0);
-        shoot_net_poll(network_socket, max_socket, &peer_pong_data, sizeof(peer_pong_data), 0, 0, 0, 0);
+        shoot_net_poll(network_socket, max_socket, &peer_header, sizeof(peer_header));
+        shoot_net_poll(network_socket, max_socket, &peer_pong_data, sizeof(peer_pong_data));
 
         if (shoot_is_string_equal(peer_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1) && peer_header.state == GAME_STATE_PONG)
         {
@@ -239,8 +239,8 @@ static void pong_loop()
     {
         struct ShootPongGameData peer_pong_data = {};
         struct ShootNetHeader peer_header = {};
-        shoot_net_poll(network_socket, max_socket, &peer_header, sizeof(peer_header), 0, 0, 0, 0);
-        shoot_net_poll(network_socket, max_socket, &peer_pong_data, sizeof(peer_pong_data), 0, 0, 0, 0);
+        shoot_net_poll(network_socket, max_socket, &peer_header, sizeof(peer_header));
+        shoot_net_poll(network_socket, max_socket, &peer_pong_data, sizeof(peer_pong_data));
 
         if (shoot_is_string_equal(peer_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1) && peer_header.state == GAME_STATE_PONG)
         {
@@ -375,7 +375,6 @@ static void menu_loop()
             {
                 printf("connecting to local area network as player one\n");
                 network_socket = shoot_net_open_listening_socket(0, SHOOT_NET_PORT, &network_address);
-
                 if (!ISVALIDSOCKET(network_socket))
                 {
                     printf("Failed to join local network as player one, that player probably already exists.\n");
@@ -384,14 +383,16 @@ static void menu_loop()
                     network_setup = FALSE;
                     break;
                 }
+                
                 destination_socket = shoot_net_open_peer_socket(broadcast_address, SHOOT_NET_PORT_P2, &peer_address);
-                // shoot_net_broadcast(broadcast_address, SHOOT_NET_PORT, &send_header, sizeof(send_header));
-                struct ShootNetHeader send_header = shoot_net_make_send_header();
-                shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
-
-                struct ShootNetHeader temp_header = {};
-                shoot_net_receive(network_socket, 0, 0, &temp_header, sizeof(temp_header));
-                verify(FALSE, "got internet working");
+                if (!ISVALIDSOCKET(destination_socket))
+                {
+                    printf("failed to open peer connection with broadcast address\n");
+                    network_state = SHOOT_NET_STATUS_OFFLINE;
+                    NET_SHUTDOWN;
+                    network_setup = FALSE;
+                    break;
+                }
 
                 max_socket = network_socket;
 
@@ -411,14 +412,16 @@ static void menu_loop()
                     network_setup = FALSE;
                     break;
                 }
+
                 destination_socket = shoot_net_open_peer_socket(broadcast_address, SHOOT_NET_PORT, &peer_address);
-                // shoot_net_broadcast(broadcast_address, SHOOT_NET_PORT, &send_header, sizeof(send_header));
-                struct ShootNetHeader send_header = shoot_net_make_send_header();
-                shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
-                
-                struct ShootNetHeader temp_header = {};
-                shoot_net_receive(network_socket, 0, 0, &temp_header, sizeof(temp_header));
-                verify(FALSE, "got internet working");
+                if (!ISVALIDSOCKET(destination_socket))
+                {
+                    printf("failed to open peer connection with broadcast address\n");
+                    network_state = SHOOT_NET_STATUS_OFFLINE;
+                    NET_SHUTDOWN;
+                    network_setup = FALSE;
+                    break;
+                }
 
                 max_socket = network_socket;
 
@@ -437,21 +440,12 @@ static void menu_loop()
         struct ShootNetHeader temp_header = {};
         struct ShootPlayerCursor temp_cursor = {};
 
-        char temp_hostname[128], temp_port[32];
-        shoot_net_poll(network_socket, max_socket, &temp_header, sizeof(temp_header), temp_hostname, 128, temp_port, 32);
-        bool32 cursor_exists = shoot_net_poll(network_socket, max_socket, &temp_cursor, sizeof(temp_cursor), 0, 0, 0, 0);
+        shoot_net_poll(network_socket, max_socket, &temp_header, sizeof(temp_header));
+        bool32 cursor_exists = shoot_net_poll(network_socket, max_socket, &temp_cursor, sizeof(temp_cursor));
 
         if (shoot_is_string_equal(temp_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1))
         {
-            printf("received data from %.*s %.*s\n", 128, temp_hostname, 32, temp_port);
-            if (!ISVALIDSOCKET(destination_socket))
-            {
-                /* this is wrong just take the peer_address when you poll for the first time lmao */
-                destination_socket = shoot_net_open_peer_socket(temp_hostname, temp_port, &peer_address);
-                printf("connection established with peer %s %s\n", temp_hostname, temp_port);
-            }
-            
-            if (cursor_exists)
+            if (temp_header.state == GAME_STATE_MENU && cursor_exists)
             {
                 menu_player_two = temp_cursor;
             }
@@ -467,20 +461,13 @@ static void menu_loop()
     {
         struct ShootNetHeader temp_header = {};
         struct ShootPlayerCursor temp_cursor = {};
-        char temp_hostname[128], temp_port[32];
-        shoot_net_poll(network_socket, max_socket, &temp_header, sizeof(temp_header), temp_hostname, 128, temp_port, 32);
-        bool32 cursor_exists = shoot_net_poll(network_socket, max_socket, &temp_cursor, sizeof(temp_cursor), 0, 0, 0, 0);
+
+        shoot_net_poll(network_socket, max_socket, &temp_header, sizeof(temp_header));
+        bool32 cursor_exists = shoot_net_poll(network_socket, max_socket, &temp_cursor, sizeof(temp_cursor));
 
         if (shoot_is_string_equal(temp_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1))
         {
-            printf("received data from %.*s %.*s\n", 128, temp_hostname, 32, temp_port);
-            if (!ISVALIDSOCKET(destination_socket))
-            {
-                destination_socket = shoot_net_open_peer_socket(temp_hostname, temp_port, &peer_address);
-                printf("connection established with peer %s %s\n", temp_hostname, temp_port);
-            }
-
-            if (cursor_exists)
+            if (temp_header.state == GAME_STATE_MENU && cursor_exists)
             {
                 menu_player_one = temp_cursor;
             }

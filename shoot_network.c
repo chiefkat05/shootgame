@@ -84,11 +84,7 @@ static void shoot_net_receive(SOCKET host_socket, struct sockaddr *return_addres
     {
         printf("failed to receive data to peer\n");
     }
-    char hostname_buffer[100], port_buffer[100];
-    getnameinfo((struct sockaddr *)&socket_address, socket_address_length,
-        hostname_buffer, sizeof(hostname_buffer), port_buffer, sizeof(port_buffer), NI_NUMERICHOST);
-    printf("receiving %i bytes of data from %.*s, %.*s\n", bytes_received, 100, hostname_buffer, 100, port_buffer);
-
+    printf("received %i bytes of data from peer\n", bytes_received);
 }
 static void shoot_net_send(SOCKET peer_socket, struct addrinfo *peer_address, void *data, uint64 data_length)
 {
@@ -97,11 +93,12 @@ static void shoot_net_send(SOCKET peer_socket, struct addrinfo *peer_address, vo
     {
         printf("failed to sent data to peer\n");
     }
+    printf("sent %lu bytes of data to peer\n", bytes_sent);
 }
 
 /** Keep updating this untill you're happy with it, e.g. maybe the header can include some data information or something. - Chief **/
 static bool32 shoot_net_poll(SOCKET listening_socket, SOCKET max_socket,
-    void *out_data, uint64 out_data_length, char *return_hostname, uint32 hostname_length, char *return_port, uint32 port_length)
+    void *out_data, uint64 out_data_length)
 {
     fd_set read_set;
 
@@ -114,19 +111,10 @@ static bool32 shoot_net_poll(SOCKET listening_socket, SOCKET max_socket,
 
     if (FD_ISSET(listening_socket, &read_set))
     {
-        printf("received data from peer\n");
         struct sockaddr_storage peer_socket_address;
         uint32 peer_socket_address_length;
         shoot_net_receive(listening_socket, (struct sockaddr *)&peer_socket_address, &peer_socket_address_length, out_data, out_data_length);
 
-        char hostname_buffer[hostname_length], port_buffer[port_length];
-        shoot_net_get_socket_address_ip((struct sockaddr *)&peer_socket_address, peer_socket_address_length,
-            hostname_buffer, hostname_length, port_buffer, port_length);
-
-        printf("ip = %.*s %.*s\n", hostname_length, hostname_buffer, port_length, port_buffer);
-
-        // if (return_hostname) { strcpy(return_hostname, hostname_buffer); }
-        // if (return_port) { strcpy(return_port, port_buffer); }
         return TRUE;
     }
     return FALSE;
@@ -152,7 +140,6 @@ static void shoot_net_get_socket_address_ip(struct sockaddr *socket_address, uin
     char hostname_buffer[100], port_buffer[100];
     getnameinfo(socket_address, socket_address_length,
         hostname_buffer, sizeof(hostname_buffer), port_buffer, sizeof(port_buffer), NI_NUMERICHOST);
-        printf("getting port name %.*s, %.*s\n", 128, hostname_buffer, 32, port_buffer);
 
     strcpy(out_hostname, hostname_buffer);
     strcpy(out_port, port_buffer);
