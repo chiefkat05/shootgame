@@ -62,8 +62,7 @@ enum ShootNetStatus {
 };
 
 #define SHOOT_NET_BROADCAST_ADDRESS "0.0.0.0"
-#define SHOOT_NET_PLAYER_ONE_PORT "4444"
-#define SHOOT_NET_PLAYER_TWO_PORT "4445"
+#define SHOOT_NET_PORT "4444"
 #define SHOOT_NET_HEADER_ID "SHOOT"
 struct ShootNetHeader {
     char ID[5];
@@ -374,10 +373,10 @@ static void menu_loop()
             case SHOOT_NET_STATUS_PLAYER_ONE:
             {
                 printf("connecting to local area network as player one\n");
-                network_socket = shoot_net_open_listening_socket(0, SHOOT_NET_PLAYER_ONE_PORT, &network_address);
+                network_socket = shoot_net_open_listening_socket(0, SHOOT_NET_PORT, &network_address);
 
                 struct ShootNetHeader send_header = shoot_net_make_send_header();
-                shoot_net_broadcast(broadcast_address, SHOOT_NET_PLAYER_TWO_PORT, &send_header, sizeof(send_header));
+                shoot_net_broadcast(broadcast_address, SHOOT_NET_PORT, &send_header, sizeof(send_header));
 
                 if (!ISVALIDSOCKET(network_socket))
                 {
@@ -396,10 +395,10 @@ static void menu_loop()
             case SHOOT_NET_STATUS_PLAYER_TWO:
             {
                 printf("connecting to local area network as player two\n");
-                network_socket = shoot_net_open_listening_socket(0, SHOOT_NET_PLAYER_TWO_PORT, &network_address);
+                network_socket = shoot_net_open_listening_socket(0, SHOOT_NET_PORT, &network_address);
 
                 struct ShootNetHeader send_header = shoot_net_make_send_header();
-                shoot_net_broadcast(broadcast_address, SHOOT_NET_PLAYER_ONE_PORT, &send_header, sizeof(send_header));
+                shoot_net_broadcast(broadcast_address, SHOOT_NET_PORT, &send_header, sizeof(send_header));
                 
                 if (!ISVALIDSOCKET(network_socket))
                 {
