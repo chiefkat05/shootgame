@@ -42,14 +42,15 @@ static void shoot_net_broadcast(const char *hostname, const char *port, void *da
     verify(error_code == SUCCESS, "failed to get address info");
 
     SOCKET broadcast_socket = socket(broadcast_address->ai_family, broadcast_address->ai_socktype, broadcast_address->ai_protocol);
-    // int option = 1;
-    // setsockopt(broadcast_socket, SOL_SOCKET, SO_BROADCAST, &option, sizeof(option));
+    int option = 1;
+    setsockopt(broadcast_socket, SOL_SOCKET, SO_BROADCAST, &option, sizeof(option));
     verify(ISVALIDSOCKET(broadcast_socket), "socket call failed for broadcast_socket");
 
     int64 bytes_sent = sendto(broadcast_socket, data, data_length, 0, broadcast_address->ai_addr, broadcast_address->ai_addrlen);
     if (bytes_sent < 0)
     {
         printf("Network Error: Failed to broadcast message\n");
+        return;
     }
 
     printf("broadcasting existance to local area network using hostname and port %s %s\n", hostname, port);
@@ -80,24 +81,29 @@ static void shoot_net_receive(SOCKET host_socket, struct sockaddr *return_addres
 {
     struct sockaddr_storage socket_address;
     uint32 socket_address_length = sizeof(socket_address);
-    int bytes_received = recvfrom(host_socket, data_out, data_length, 0, (struct sockaddr *)&socket_address, &socket_address_length);
+    int32 bytes_received = recvfrom(host_socket, data_out, data_length, 0, (struct sockaddr *)&socket_address, &socket_address_length);
     if (bytes_received < 1)
     {
         printf("failed to receive data to peer\n");
+        return;
     }
-    printf("received %i bytes of data from peer\n", bytes_received);
+    char hostname[100], port[100];
+    getnameinfo((struct sockaddr *)&socket_address, socket_address_length,
+        hostname, sizeof(hostname), port, sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV);
+    printf("received %i bytes of data from peer at %s %s\n", bytes_received, hostname, port);
 }
 static void shoot_net_send(SOCKET peer_socket, struct addrinfo *peer_address, void *data, uint64 data_length)
 {
-    uint64 bytes_sent = sendto(peer_socket, data, data_length, 0, peer_address->ai_addr, peer_address->ai_addrlen);
+    int32 bytes_sent = sendto(peer_socket, data, data_length, 0, peer_address->ai_addr, peer_address->ai_addrlen);
     if (bytes_sent < 1)
     {
         printf("failed to sent data to peer\n");
+        return;
     }
 
     char hostname[100], port[100];
     getnameinfo(peer_address->ai_addr, peer_address->ai_addrlen, hostname, sizeof(hostname), port, sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV);
-    printf("sent %lu bytes of data to peer at %s %s\n", bytes_sent, hostname, port);
+    printf("sent %i bytes of data to peer at %s %s\n", bytes_sent, hostname, port);
 }
 
 /** Keep updating this untill you're happy with it, e.g. maybe the header can include some data information or something. - Chief **/
