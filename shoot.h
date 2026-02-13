@@ -192,4 +192,54 @@ struct ShootRect
     int32 left, bottom, right, top;
 };
 
+/* ------------------ Networking ---------------- */
+
+#ifdef _WIN32
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0600
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
+#ifndef AI_ALL
+#define AI_ALL 0x0100
+#endif
+#else
+
+#ifndef __USE_XOPEN2K
+#define __USE_XOPEN2K
+#endif
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <unistd.h>
+
+#endif
+
+#ifdef _WIN32
+#define ISVALIDSOCKET(sock) ((sock) != INVALID_SOCKET)
+#define CLOSESOCKET(sock) closesocket(sock)
+#else
+#define ISVALIDSOCKET(sock) ((sock) >= 0)
+#define CLOSESOCKET(sock) close(sock)
+#define SOCKET int
+#endif
+
+#ifdef _WIN32
+#define NET_STARTUP WSADATA d; verify(!WSAStartup(MAKEWORD(2, 2), &d), "WSAStartup failure");
+#define NET_SHUTDOWN WSACleanup();
+#else
+#define NET_STARTUP
+#define NET_SHUTDOWN
+#endif
+
+static void shoot_net_get_socket_ip(SOCKET host_socket, char *out_hostname, uint32 out_hostname_length,
+            char *out_port, uint32 out_port_length);
+static void shoot_net_get_address_ip(struct addrinfo *address, char *out_hostname, uint32 out_hostname_length,
+            char *out_port, uint32 out_port_length);
+static void shoot_net_get_socket_address_ip(struct sockaddr *socket_address, uint32 socket_address_length,
+            char *out_hostname, uint32 out_hostname_length, char *out_port, uint32 out_port_length);
 #endif

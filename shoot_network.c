@@ -4,49 +4,6 @@
 
 #include "shoot.h"
 
-#ifdef _WIN32
-#ifndef _WIN32_WINNT
-#define _WIN32_WINNT 0x0600
-#endif
-#include <winsock2.h>
-#include <ws2tcpip.h>
-
-#ifndef AI_ALL
-#define AI_ALL 0x0100
-#endif
-
-#else
-
-#ifndef __USE_XOPEN2K
-#define __USE_XOPEN2K
-#endif
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/select.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <unistd.h>
-
-#endif
-
-#ifdef _WIN32
-#define ISVALIDSOCKET(sock) ((sock) != INVALID_SOCKET)
-#define CLOSESOCKET(sock) closesocket(sock)
-#else
-#define ISVALIDSOCKET(sock) ((sock) >= 0)
-#define CLOSESOCKET(sock) close(sock)
-#define SOCKET int
-#endif
-
-#ifdef _WIN32
-#define NET_STARTUP WSADATA d; verify(!WSAStartup(MAKEWORD(2, 2), &d), "WSAStartup failure");
-#define NET_SHUTDOWN WSACleanup();
-#else
-#define NET_STARTUP
-#define NET_SHUTDOWN
-#endif
-
 static SOCKET shoot_net_open_listening_socket(const char *hostname, const char *port, struct addrinfo **listening_address)
 {
     int error_code;
@@ -120,11 +77,18 @@ static SOCKET shoot_net_open_peer_socket(const char *hostname, const char *port,
 }
 static void shoot_net_receive(SOCKET host_socket, struct sockaddr *return_address, socklen_t *return_length, void *data_out, uint64 data_length)
 {
-    int bytes_received = recvfrom(host_socket, data_out, data_length, 0, return_address, return_length);
+    struct sockaddr_storage socket_address;
+    uint32 socket_address_length = sizeof(socket_address);
+    int bytes_received = recvfrom(host_socket, data_out, data_length, 0, (struct sockaddr *)&socket_address, &socket_address_length);
     if (bytes_received < 1)
     {
         printf("failed to receive data to peer\n");
     }
+    char hostname_buffer[100], port_buffer[100];
+    getnameinfo((struct sockaddr *)&socket_address, socket_address_length,
+        hostname_buffer, sizeof(hostname_buffer), port_buffer, sizeof(port_buffer), NI_NUMERICHOST);
+    printf("receiving %i bytes of data from %.*s, %.*s\n", bytes_received, 100, hostname_buffer, 100, port_buffer);
+
 }
 static void shoot_net_send(SOCKET peer_socket, struct addrinfo *peer_address, void *data, uint64 data_length)
 {
@@ -137,7 +101,7 @@ static void shoot_net_send(SOCKET peer_socket, struct addrinfo *peer_address, vo
 
 /** Keep updating this untill you're happy with it, e.g. maybe the header can include some data information or something. - Chief **/
 static bool32 shoot_net_poll(SOCKET listening_socket, SOCKET max_socket,
-    void *out_data, uint64 out_data_length)
+    void *out_data, uint64 out_data_length, char *return_hostname, uint32 hostname_length, char *return_port, uint32 port_length)
 {
     fd_set read_set;
 
@@ -150,7 +114,18 @@ static bool32 shoot_net_poll(SOCKET listening_socket, SOCKET max_socket,
 
     if (FD_ISSET(listening_socket, &read_set))
     {
-        shoot_net_receive(listening_socket, 0, 0, out_data, out_data_length);
+        struct sockaddr_storage peer_socket_address;
+        uint32 peer_socket_address_length;
+        shoot_net_receive(listening_socket, (struct sockaddr *)&peer_socket_address, &peer_socket_address_length, out_data, out_data_length);
+
+        char hostname_buffer[hostname_length], port_buffer[port_length];
+        shoot_net_get_socket_address_ip((struct sockaddr *)&peer_socket_address, peer_socket_address_length,
+            hostname_buffer, hostname_length, port_buffer, port_length);
+
+        printf("ip = %.*s %.*s\n", hostname_length, hostname_buffer, port_length, port_buffer);
+
+        // if (return_hostname) { strcpy(return_hostname, hostname_buffer); }
+        // if (return_port) { strcpy(return_port, port_buffer); }
         return TRUE;
     }
     return FALSE;
@@ -169,6 +144,17 @@ static void shoot_net_get_address_ip(struct addrinfo *address, char *out_hostnam
             char *out_port, uint32 out_port_length)
 {
     getnameinfo(address->ai_addr, address->ai_addrlen, out_hostname, out_hostname_length, out_port, out_port_length, NI_NUMERICHOST | NI_NUMERICSERV);
+}
+static void shoot_net_get_socket_address_ip(struct sockaddr *socket_address, uint32 socket_address_length,
+            char *out_hostname, uint32 hostname_length, char *out_port, uint32 port_length)
+{
+    char hostname_buffer[100], port_buffer[100];
+    getnameinfo(socket_address, socket_address_length,
+        hostname_buffer, sizeof(hostname_buffer), port_buffer, sizeof(port_buffer), NI_NUMERICHOST);
+        printf("getting port name %.*s, %.*s\n", 128, hostname_buffer, 32, port_buffer);
+
+    strcpy(out_hostname, hostname_buffer);
+    strcpy(out_port, port_buffer);
 }
 
 typedef struct addrinfo AddressInfo;
