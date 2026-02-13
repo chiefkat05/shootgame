@@ -148,7 +148,7 @@ static void shoot_window_draw(struct ShootWindow window);
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
-#define ABSOLUTE(a) ((a) < 0 ? (-(a)) : (a))
+#define ABS(a) ((a) < 0 ? (-(a)) : (a))
 
 static real shoot_math_lerp(real source, real destination, real alpha);
 static int32 shoot_math_round_to_int(real number);

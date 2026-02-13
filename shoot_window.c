@@ -23,7 +23,7 @@ static void joystickPoll(struct ShootWindowData *winData, int jid)
     for (i = 0; i < axesCount; ++i)
     {
         real axesValue = axes[i];
-        if(ABSOLUTE(axes[i]) < JOYSTICK_AXES_DEADZONE)
+        if(ABS(axes[i]) < JOYSTICK_AXES_DEADZONE)
         {
             axesValue = 0.0;
         }

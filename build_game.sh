@@ -8,13 +8,13 @@ cp -r sfx BUILD_LINUX/sfx
 cp -r shaders BUILD_LINUX/shaders
 
 x86_64-w64-mingw32-gcc shoot_main.c -o BUILD_WINDOWS/shoot.exe -L../glad \
-        -l:libglfw3.a -l:libglad.a -l:libopengl32.a -l:libgdi32.a -l:libportaudio.a -Ofast
+        -l:libglfw3.a -l:libgladwin.a -l:libopengl32.a -l:libgdi32.a -lws2_32 -Ofast
 cp -r gfx BUILD_WINDOWS/gfx
 cp -r lvl BUILD_WINDOWS/lvl
 cp -r sav BUILD_WINDOWS/sav
 cp -r sfx BUILD_WINDOWS/sfx
 cp -r shaders BUILD_WINDOWS/shaders
 
-emcc --use-port=contrib.glfw3 shoot_main.c -o BUILD_BROWSER/index.html -lglfw -lglad -lGL -O3 -ffast-math \
-        --preload-file gfx --preload-file lvl --preload-file sav --preload-file sfx --preload-file shaders \
-        -sINITIAL_HEAP=1gb
+# emcc --use-port=contrib.glfw3 shoot_main.c -o BUILD_BROWSER/index.html -lglfw -lglad -lGL -O3 -ffast-math \
+#         --preload-file gfx --preload-file lvl --preload-file sav --preload-file sfx --preload-file shaders \
+#         -sINITIAL_HEAP=1gb
