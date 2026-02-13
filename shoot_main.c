@@ -375,10 +375,6 @@ static void menu_loop()
                 printf("connecting to local area network as player one\n");
                 network_socket = shoot_net_open_listening_socket(0, SHOOT_NET_PORT, &network_address);
 
-                // struct ShootNetHeader send_header = shoot_net_make_send_header();
-                destination_socket = shoot_net_open_peer_socket(broadcast_address, SHOOT_NET_PORT, &peer_address);
-                // shoot_net_broadcast(broadcast_address, SHOOT_NET_PORT, &send_header, sizeof(send_header));
-
                 if (!ISVALIDSOCKET(network_socket))
                 {
                     printf("Failed to join local network as player one, that player probably already exists.\n");
@@ -387,6 +383,14 @@ static void menu_loop()
                     network_setup = FALSE;
                     break;
                 }
+                destination_socket = shoot_net_open_peer_socket(broadcast_address, SHOOT_NET_PORT, &peer_address);
+                // shoot_net_broadcast(broadcast_address, SHOOT_NET_PORT, &send_header, sizeof(send_header));
+                struct ShootNetHeader send_header = shoot_net_make_send_header();
+                shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
+
+                struct ShootNetHeader temp_header = {};
+                shoot_net_receive(network_socket, 0, 0, &temp_header, sizeof(temp_header));
+                verify(FALSE, "got internet working");
 
                 max_socket = network_socket;
 
@@ -398,10 +402,6 @@ static void menu_loop()
                 printf("connecting to local area network as player two\n");
                 network_socket = shoot_net_open_listening_socket(0, SHOOT_NET_PORT, &network_address);
 
-                // struct ShootNetHeader send_header = shoot_net_make_send_header();
-                destination_socket = shoot_net_open_peer_socket(broadcast_address, SHOOT_NET_PORT, &peer_address);
-                // shoot_net_broadcast(broadcast_address, SHOOT_NET_PORT, &send_header, sizeof(send_header));
-                
                 if (!ISVALIDSOCKET(network_socket))
                 {
                     printf("Failed to join local network as player two, that player probably already exists.\n");
@@ -410,6 +410,14 @@ static void menu_loop()
                     network_setup = FALSE;
                     break;
                 }
+                destination_socket = shoot_net_open_peer_socket(broadcast_address, SHOOT_NET_PORT, &peer_address);
+                // shoot_net_broadcast(broadcast_address, SHOOT_NET_PORT, &send_header, sizeof(send_header));
+                struct ShootNetHeader send_header = shoot_net_make_send_header();
+                shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
+                
+                struct ShootNetHeader temp_header = {};
+                shoot_net_receive(network_socket, 0, 0, &temp_header, sizeof(temp_header));
+                verify(FALSE, "got internet working");
 
                 max_socket = network_socket;
 
