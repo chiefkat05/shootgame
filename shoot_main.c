@@ -264,7 +264,7 @@ static void pong_loop()
         shoot_net_send(destination_socket, peer_address, &pong_data, sizeof(pong_data));
     }
 }
-static void pong_render()
+static void pong_render(real alpha_time)
 {
     shoot_image_draw_rect(&window.data->screen, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0.2, 0.7, 0.8, 1.0);
 
@@ -493,7 +493,7 @@ static void shoot_toggle_draw(struct ShootRect rect, real red, real green, real 
             green * (1.0 + (hovered * 0.1)) * (1.0 - (held * 0.25)) * (1.0 - 0.7 * (toggled != 0)),
             blue * (1.0 + (hovered * 0.1)) * (1.0 - (held * 0.25)) * (1.0 - 0.7 * (toggled != 0)), 1.0);
 }
-static void menu_render()
+static void menu_render(real alpha_time)
 {
     shoot_image_draw_rect(&window.data->screen, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0.2, 0.25, 0.2, 1.0);
 
@@ -546,15 +546,15 @@ static bool32 game_loop()
     if (window.data->accumulated_time >= PHYSICS_TICK_SPEED) { return TRUE; }
     return FALSE;
 }
-static void game_render()
+static void game_render(real alpha_time)
 {
     switch(state)
     {
         case GAME_STATE_MENU:
-            menu_render();
+            menu_render(alpha_time);
             break;
         case GAME_STATE_PONG:
-            pong_render();
+            pong_render(alpha_time);
             break;
         default:
             game_end = TRUE;
@@ -569,7 +569,8 @@ static void main_loop()
     shoot_window_start_physics_tick(window);
 
     while (game_loop()) {}
-    game_render();
+    real alpha_time = window.data->accumulated_time / PHYSICS_TICK_SPEED;
+    game_render(alpha_time);
 
     if (game_end)
     {

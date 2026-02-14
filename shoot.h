@@ -110,7 +110,7 @@ static void shoot_image_flip_horizontal(struct ShootImage *source, struct ShootI
 #define RESIZE_FUNCTION(name) void(name)(int window_width, int window_height, int screen_width, int screen_height)
 #define RESIZE_FUNCTION_POINTER(name) RESIZE_FUNCTION(*name)
 
-#define PHYSICS_TICK_SPEED 1.0/144.0
+#define PHYSICS_TICK_SPEED 1.0/256.0
 struct ShootWindowData
 {
     struct ShootImage screen;
