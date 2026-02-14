@@ -421,15 +421,11 @@ static void menu_loop()
         socklen_t temp_socket_address_length = sizeof(temp_socket_address);
         shoot_net_poll(network_socket, max_socket, &temp_header, sizeof(temp_header),
             (struct sockaddr *)&temp_socket_address, &temp_socket_address_length);
-        printf("here\n");
         bool32 cursor_exists = shoot_net_poll(network_socket, max_socket, &temp_cursor, sizeof(temp_cursor), 0, 0);
-
-                printf(" test 1\n");
         if (shoot_is_string_equal(temp_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1))
         {
             if (!ISVALIDSOCKET(destination_socket))
             {
-                printf("not a good thing\n");
                 char hostname_buffer[100], port_buffer[100];
                 getnameinfo((struct sockaddr *)&temp_socket_address, temp_socket_address_length,
                     hostname_buffer, sizeof(hostname_buffer), port_buffer, sizeof(port_buffer), NI_NUMERICHOST | NI_NUMERICSERV);
@@ -480,7 +476,6 @@ static void menu_loop()
             struct ShootNetHeader send_header = shoot_net_make_send_header();
             shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
             shoot_net_send(destination_socket, peer_address, &menu_player_two, sizeof(menu_player_two));
-            printf("sent data\n");
         }
     }
 }

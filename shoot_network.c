@@ -91,29 +91,15 @@ static void shoot_net_receive(SOCKET host_socket, struct sockaddr *return_addres
         printf("failed to receive data to peer\n");
         return;
     }
-    if (return_address && return_length)
-    {
-    char hostname[100], port[100];
-    getnameinfo(return_address, *return_length, hostname, sizeof(hostname), port, sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV);
-    printf("received %i bytes of data from peer at %s %s\n", bytes_received, hostname, port);
-    }
-    else
-    {
-    printf("received %i bytes of data from unknown source\n", bytes_received);
-    }
 }
 static void shoot_net_send(SOCKET peer_socket, struct addrinfo *peer_address, void *data, uint64 data_length)
 {
     int32 bytes_sent = sendto(peer_socket, data, data_length, 0, peer_address->ai_addr, peer_address->ai_addrlen);
     if (bytes_sent < 1)
     {
-        // printf("failed to send data to peer\n");
+        printf("failed to send data to peer\n");
         return;
     }
-
-    char hostname[100], port[100];
-    getnameinfo(peer_address->ai_addr, peer_address->ai_addrlen, hostname, sizeof(hostname), port, sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV);
-    printf("sent %i bytes of data to peer at %s %s\n", bytes_sent, hostname, port);
 }
 
 /** Keep updating this untill you're happy with it, e.g. maybe the header can include some data information or something. - Chief **/
