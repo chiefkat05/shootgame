@@ -4,7 +4,7 @@
 
 #include "shoot.h"
 
-static SOCKET shoot_net_open_listening_socket(const char *hostname, const char *port, struct addrinfo **listening_address)
+static SOCKET shoot_net_open_listening_socket(const char *port)
 {
     int error_code;
 
@@ -13,20 +13,22 @@ static SOCKET shoot_net_open_listening_socket(const char *hostname, const char *
         .ai_socktype = SOCK_DGRAM,
         .ai_flags = AI_PASSIVE,
     };
-    error_code = getaddrinfo(hostname, port, &hints, listening_address);
+    struct addrinfo *listening_address;
+    error_code = getaddrinfo(0, port, &hints, &listening_address);
     verify(error_code == SUCCESS, "failed to get address info");
 
-    SOCKET host_socket = socket((*listening_address)->ai_family, (*listening_address)->ai_socktype, (*listening_address)->ai_protocol);
+    SOCKET host_socket = socket(listening_address->ai_family, listening_address->ai_socktype, listening_address->ai_protocol);
     verify(ISVALIDSOCKET(host_socket), "socket call failed for host_socket");
 
-    error_code = bind(host_socket, (*listening_address)->ai_addr, (*listening_address)->ai_addrlen);
+    error_code = bind(host_socket, listening_address->ai_addr, listening_address->ai_addrlen);
     if (error_code != SUCCESS)
     {
         printf("Network Error: Failed to bind address\n");
-        freeaddrinfo(*listening_address);
+        freeaddrinfo(listening_address);
         return -1;
     }
 
+    freeaddrinfo(listening_address);
     return host_socket;
 }
 static void shoot_net_broadcast(const char *hostname, const char *port, void *data, uint64 data_length)
@@ -43,7 +45,11 @@ static void shoot_net_broadcast(const char *hostname, const char *port, void *da
 
     SOCKET broadcast_socket = socket(broadcast_address->ai_family, broadcast_address->ai_socktype, broadcast_address->ai_protocol);
     int option = 1;
-    setsockopt(broadcast_socket, SOL_SOCKET, SO_BROADCAST, &option, sizeof(option));
+    error_code = setsockopt(broadcast_socket, SOL_SOCKET, SO_BROADCAST, &option, sizeof(option));
+    if (error_code < 0)
+    {
+        printf("Network Error: Failed to set socket broadcasting option to 1\n");
+    }
     verify(ISVALIDSOCKET(broadcast_socket), "socket call failed for broadcast_socket");
 
     int64 bytes_sent = sendto(broadcast_socket, data, data_length, 0, broadcast_address->ai_addr, broadcast_address->ai_addrlen);
@@ -79,25 +85,29 @@ static SOCKET shoot_net_open_peer_socket(const char *hostname, const char *port,
 }
 static void shoot_net_receive(SOCKET host_socket, struct sockaddr *return_address, socklen_t *return_length, void *data_out, uint64 data_length)
 {
-    struct sockaddr_storage socket_address;
-    uint32 socket_address_length = sizeof(socket_address);
-    int32 bytes_received = recvfrom(host_socket, data_out, data_length, 0, (struct sockaddr *)&socket_address, &socket_address_length);
+    int32 bytes_received = recvfrom(host_socket, data_out, data_length, 0, return_address, return_length);
     if (bytes_received < 1)
     {
         printf("failed to receive data to peer\n");
         return;
     }
+    if (return_address && return_length)
+    {
     char hostname[100], port[100];
-    getnameinfo((struct sockaddr *)&socket_address, socket_address_length,
-        hostname, sizeof(hostname), port, sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV);
+    getnameinfo(return_address, *return_length, hostname, sizeof(hostname), port, sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV);
     printf("received %i bytes of data from peer at %s %s\n", bytes_received, hostname, port);
+    }
+    else
+    {
+    printf("received %i bytes of data from unknown source\n", bytes_received);
+    }
 }
 static void shoot_net_send(SOCKET peer_socket, struct addrinfo *peer_address, void *data, uint64 data_length)
 {
     int32 bytes_sent = sendto(peer_socket, data, data_length, 0, peer_address->ai_addr, peer_address->ai_addrlen);
     if (bytes_sent < 1)
     {
-        printf("failed to sent data to peer\n");
+        // printf("failed to send data to peer\n");
         return;
     }
 
@@ -141,16 +151,6 @@ static void shoot_net_get_address_ip(struct addrinfo *address, char *out_hostnam
             char *out_port, uint32 out_port_length)
 {
     getnameinfo(address->ai_addr, address->ai_addrlen, out_hostname, out_hostname_length, out_port, out_port_length, NI_NUMERICHOST | NI_NUMERICSERV);
-}
-static void shoot_net_get_socket_address_ip(struct sockaddr *socket_address, uint32 socket_address_length,
-            char *out_hostname, uint32 hostname_length, char *out_port, uint32 port_length)
-{
-    char hostname_buffer[100], port_buffer[100];
-    getnameinfo(socket_address, socket_address_length,
-        hostname_buffer, sizeof(hostname_buffer), port_buffer, sizeof(port_buffer), NI_NUMERICHOST);
-
-    strcpy(out_hostname, hostname_buffer);
-    strcpy(out_port, port_buffer);
 }
 
 typedef struct addrinfo AddressInfo;

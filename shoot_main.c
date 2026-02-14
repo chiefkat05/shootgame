@@ -61,7 +61,7 @@ enum ShootNetStatus {
     SHOOT_NET_STATUS_PLAYER_TWO,
 };
 
-#define SHOOT_NET_BROADCAST_ADDRESS "0.0.0.0"
+#define SHOOT_NET_BROADCAST_ADDRESS "255.255.255.255"
 #define SHOOT_NET_PORT "4444"
 #define SHOOT_NET_PORT_P2 "4445"
 #define SHOOT_NET_HEADER_ID "SHOOT"
@@ -76,7 +76,7 @@ static enum ShootNetStatus network_state;
 static bool32 network_setup, network_up_to_date_with_peers;
 fd_set network_master_set;
 SOCKET network_socket, destination_socket = -1, max_socket;
-struct addrinfo *network_address, *peer_address;
+struct addrinfo *peer_address;
 char broadcast_address[100];
 
 static void shoot_game_change_state(enum ShootGameState new_state)
@@ -90,12 +90,7 @@ static void shoot_game_change_state(enum ShootGameState new_state)
 }
 static struct ShootNetHeader shoot_net_make_send_header()
 {
-    char hostname_buffer[128], port_buffer[32];
-    shoot_net_get_address_ip(network_address, hostname_buffer, 128, port_buffer, 32);
-
     struct ShootNetHeader send_header = { .ID = SHOOT_NET_HEADER_ID, .state = state };
-    // strcpy(send_header.hostname, hostname_buffer);
-    // strcpy(send_header.port, port_buffer);
         
     return send_header;
 }
@@ -374,7 +369,7 @@ static void menu_loop()
             case SHOOT_NET_STATUS_PLAYER_ONE:
             {
                 printf("connecting to local area network as player one\n");
-                network_socket = shoot_net_open_listening_socket(0, SHOOT_NET_PORT, &network_address);
+                network_socket = shoot_net_open_listening_socket(SHOOT_NET_PORT);
                 if (!ISVALIDSOCKET(network_socket))
                 {
                     printf("Failed to join local network as player one, that player probably already exists.\n");
@@ -395,8 +390,7 @@ static void menu_loop()
             case SHOOT_NET_STATUS_PLAYER_TWO:
             {
                 printf("connecting to local area network as player two\n");
-                network_socket = shoot_net_open_listening_socket(0, SHOOT_NET_PORT_P2, &network_address);
-
+                network_socket = shoot_net_open_listening_socket(SHOOT_NET_PORT_P2);
                 if (!ISVALIDSOCKET(network_socket))
                 {
                     printf("Failed to join local network as player two, that player probably already exists.\n");
@@ -419,8 +413,6 @@ static void menu_loop()
         }
     }
 
-    static int counter = 0;
-    ++counter;
     if (network_state == SHOOT_NET_STATUS_PLAYER_ONE)
     {
         struct ShootNetHeader temp_header = {};
@@ -429,27 +421,32 @@ static void menu_loop()
         socklen_t temp_socket_address_length = sizeof(temp_socket_address);
         shoot_net_poll(network_socket, max_socket, &temp_header, sizeof(temp_header),
             (struct sockaddr *)&temp_socket_address, &temp_socket_address_length);
+        printf("here\n");
         bool32 cursor_exists = shoot_net_poll(network_socket, max_socket, &temp_cursor, sizeof(temp_cursor), 0, 0);
 
+                printf(" test 1\n");
         if (shoot_is_string_equal(temp_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1))
         {
+            if (!ISVALIDSOCKET(destination_socket))
+            {
+                printf("not a good thing\n");
+                char hostname_buffer[100], port_buffer[100];
+                getnameinfo((struct sockaddr *)&temp_socket_address, temp_socket_address_length,
+                    hostname_buffer, sizeof(hostname_buffer), port_buffer, sizeof(port_buffer), NI_NUMERICHOST | NI_NUMERICSERV);
+                destination_socket = shoot_net_open_peer_socket(hostname_buffer, SHOOT_NET_PORT_P2, &peer_address);
+                printf("connected to %s %s\n", hostname_buffer, port_buffer);
+            }
             if (temp_header.state == GAME_STATE_MENU && cursor_exists)
             {
                 menu_player_two = temp_cursor;
             }
         }
+
         if (ISVALIDSOCKET(destination_socket))
         {
             struct ShootNetHeader send_header = shoot_net_make_send_header();
             shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
             shoot_net_send(destination_socket, peer_address, &menu_player_one, sizeof(menu_player_one));
-        }
-        else
-        {
-            char hostname_buffer[100], port_buffer[100];
-            shoot_net_get_socket_address_ip((struct sockaddr *)&temp_socket_address, temp_socket_address_length,
-                hostname_buffer, sizeof(hostname_buffer), port_buffer, sizeof(port_buffer));
-            destination_socket = shoot_net_open_peer_socket(broadcast_address, SHOOT_NET_PORT_P2, &peer_address);
         }
     }
     if (network_state == SHOOT_NET_STATUS_PLAYER_TWO)
@@ -464,6 +461,15 @@ static void menu_loop()
 
         if (shoot_is_string_equal(temp_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1))
         {
+            if (!ISVALIDSOCKET(destination_socket))
+            {
+                char hostname_buffer[100], port_buffer[100];
+                getnameinfo((struct sockaddr *)&temp_socket_address, temp_socket_address_length,
+                    hostname_buffer, sizeof(hostname_buffer), port_buffer, sizeof(port_buffer), NI_NUMERICHOST | NI_NUMERICSERV);
+                // destination_socket = shoot_net_open_peer_socket(broadcast_address, SHOOT_NET_PORT, &peer_address);
+                destination_socket = shoot_net_open_peer_socket(hostname_buffer, SHOOT_NET_PORT, &peer_address);
+                printf("connected to %s %s\n", hostname_buffer, port_buffer);
+            }
             if (temp_header.state == GAME_STATE_MENU && cursor_exists)
             {
                 menu_player_one = temp_cursor;
@@ -474,13 +480,7 @@ static void menu_loop()
             struct ShootNetHeader send_header = shoot_net_make_send_header();
             shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
             shoot_net_send(destination_socket, peer_address, &menu_player_two, sizeof(menu_player_two));
-        }
-        else
-        {
-            char hostname_buffer[100], port_buffer[100];
-            shoot_net_get_socket_address_ip((struct sockaddr *)&temp_socket_address, temp_socket_address_length,
-                hostname_buffer, sizeof(hostname_buffer), port_buffer, sizeof(port_buffer));
-            destination_socket = shoot_net_open_peer_socket(broadcast_address, SHOOT_NET_PORT, &peer_address);
+            printf("sent data\n");
         }
     }
 }
