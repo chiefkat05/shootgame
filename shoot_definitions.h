@@ -61,7 +61,7 @@ static void shoot_check_compatibility()
         printf("WARNING: sizeof(long) is not 8 bytes, this game uses 8 byte longs in a few places.\n"
                 "Game will still open but might not work as expected. (Your long size is %lu)\n", sizeof(long));
 
-        printf("If you are playing on browser, this is a normal warning message.\n"
+        printf("If you are playing on browser or windows, this is a normal warning message.\n"
             "Game should work alright, please message Chiefkat05 if something seems off.\n");
     }
     if (sizeof(int) != 4)

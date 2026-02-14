@@ -216,22 +216,32 @@ struct ShootRect
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <errno.h>
 
 #endif
 
 #ifdef _WIN32
 #define ISVALIDSOCKET(sock) ((sock) != INVALID_SOCKET)
 #define CLOSESOCKET(sock) closesocket(sock)
+#define ERRNO WSAGetLastError()
+
+void win_startup_func()
+{
+    WSADATA d;
+    // verify(!WSAStartup(MAKEWORD(2, 2), &d), "WSAStartup failure");
+    if (WSAStartup(MAKEWORD(2, 2), &d))
+    {
+        printf("huh %i\n", ERRNO);
+    }
+}
+#define NET_STARTUP win_startup_func();
+#define NET_SHUTDOWN WSACleanup();
 #else
 #define ISVALIDSOCKET(sock) ((sock) >= 0)
 #define CLOSESOCKET(sock) close(sock)
 #define SOCKET int
-#endif
+#define ERRNO errno
 
-#ifdef _WIN32
-#define NET_STARTUP WSADATA d; verify(!WSAStartup(MAKEWORD(2, 2), &d), "WSAStartup failure");
-#define NET_SHUTDOWN WSACleanup();
-#else
 #define NET_STARTUP
 #define NET_SHUTDOWN
 #endif
@@ -240,6 +250,4 @@ static void shoot_net_get_socket_ip(SOCKET host_socket, char *out_hostname, uint
             char *out_port, uint32 out_port_length);
 static void shoot_net_get_address_ip(struct addrinfo *address, char *out_hostname, uint32 out_hostname_length,
             char *out_port, uint32 out_port_length);
-static void shoot_net_get_socket_address_ip(struct sockaddr *socket_address, uint32 socket_address_length,
-            char *out_hostname, uint32 out_hostname_length, char *out_port, uint32 out_port_length);
 #endif

@@ -18,12 +18,16 @@ static SOCKET shoot_net_open_listening_socket(const char *port)
     verify(error_code == SUCCESS, "failed to get address info");
 
     SOCKET host_socket = socket(listening_address->ai_family, listening_address->ai_socktype, listening_address->ai_protocol);
-    verify(ISVALIDSOCKET(host_socket), "socket call failed for host_socket");
+    // verify(ISVALIDSOCKET(host_socket), "socket call failed for host_socket");
+    if (!ISVALIDSOCKET(host_socket))
+    {
+        printf("socket() failed %i\n", ERRNO);
+    }
 
     error_code = bind(host_socket, listening_address->ai_addr, listening_address->ai_addrlen);
     if (error_code != SUCCESS)
     {
-        printf("Network Error: Failed to bind address\n");
+        printf("Network Error: Failed to bind address %i\n", ERRNO);
         freeaddrinfo(listening_address);
         return -1;
     }
@@ -45,7 +49,7 @@ static void shoot_net_broadcast(const char *hostname, const char *port, void *da
 
     SOCKET broadcast_socket = socket(broadcast_address->ai_family, broadcast_address->ai_socktype, broadcast_address->ai_protocol);
     int option = 1;
-    error_code = setsockopt(broadcast_socket, SOL_SOCKET, SO_BROADCAST, &option, sizeof(option));
+    error_code = setsockopt(broadcast_socket, SOL_SOCKET, SO_BROADCAST, (void *)&option, sizeof(option));
     if (error_code < 0)
     {
         printf("Network Error: Failed to set socket broadcasting option to 1\n");
@@ -88,7 +92,13 @@ static void shoot_net_receive(SOCKET host_socket, struct sockaddr *return_addres
     int32 bytes_received = recvfrom(host_socket, data_out, data_length, 0, return_address, return_length);
     if (bytes_received < 1)
     {
-        printf("failed to receive data to peer\n");
+        char hostname_buffer[100] = "", port_buffer[100] = "";
+        if (return_address && return_length)
+        {
+            getnameinfo((struct sockaddr *)&return_address, *return_length,
+                hostname_buffer, sizeof(hostname_buffer), port_buffer, sizeof(port_buffer), NI_NUMERICHOST | NI_NUMERICSERV);
+        }
+        printf("failed to receive data to peer %s %s, err = %i (expected %i bytes of data)\n", hostname_buffer, port_buffer, ERRNO, data_length);
         return;
     }
 }
@@ -97,9 +107,17 @@ static void shoot_net_send(SOCKET peer_socket, struct addrinfo *peer_address, vo
     int32 bytes_sent = sendto(peer_socket, data, data_length, 0, peer_address->ai_addr, peer_address->ai_addrlen);
     if (bytes_sent < 1)
     {
-        printf("failed to send data to peer\n");
+        char hostname_buffer[100], port_buffer[100];
+        if (peer_address)
+        {
+            getnameinfo(peer_address->ai_addr, peer_address->ai_addrlen,
+                hostname_buffer, sizeof(hostname_buffer), port_buffer, sizeof(port_buffer), NI_NUMERICHOST | NI_NUMERICSERV);
+        }
+        printf("failed to send data to peer %s %s, err = %i\n", hostname_buffer, port_buffer, ERRNO);
         return;
     }
+
+    printf("sending %i bytes of data\n", bytes_sent);
 }
 
 /** Keep updating this untill you're happy with it, e.g. maybe the header can include some data information or something. - Chief **/

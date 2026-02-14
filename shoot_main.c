@@ -200,13 +200,14 @@ static void pong_loop()
 
     if (network_state == SHOOT_NET_STATUS_PLAYER_ONE)
     {
-        struct ShootPongGameData peer_pong_data = {};
         struct ShootNetHeader peer_header = {};
         shoot_net_poll(network_socket, max_socket, &peer_header, sizeof(peer_header), 0, 0);
-        shoot_net_poll(network_socket, max_socket, &peer_pong_data, sizeof(peer_pong_data), 0, 0);
 
-        if (shoot_is_string_equal(peer_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1) && peer_header.state == GAME_STATE_PONG)
+        if (shoot_is_string_equal(peer_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1) &&
+            peer_header.state == GAME_STATE_PONG)
         {
+            struct ShootPongGameData peer_pong_data = {};
+            shoot_net_poll(network_socket, max_socket, &peer_pong_data, sizeof(peer_pong_data), 0, 0);
             if (peer_header.was_here_first && !network_up_to_date_with_peers)
             {
                 printf("other player was here first\n");
@@ -221,24 +222,26 @@ static void pong_loop()
 
         struct ShootNetHeader send_header = { .ID = SHOOT_NET_HEADER_ID, .state = state,
             .was_here_first = !(peer_header.was_here_first) };
-
+        shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
         if (send_header.was_here_first)
         {
             network_up_to_date_with_peers = TRUE;
         }
 
-        shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
-        shoot_net_send(destination_socket, peer_address, &pong_data, sizeof(pong_data));
+        if (peer_header.state == GAME_STATE_PONG)
+        { shoot_net_send(destination_socket, peer_address, &pong_data, sizeof(pong_data)); }
     }
     if (network_state == SHOOT_NET_STATUS_PLAYER_TWO)
     {
-        struct ShootPongGameData peer_pong_data = {};
         struct ShootNetHeader peer_header = {};
         shoot_net_poll(network_socket, max_socket, &peer_header, sizeof(peer_header), 0, 0);
-        shoot_net_poll(network_socket, max_socket, &peer_pong_data, sizeof(peer_pong_data), 0, 0);
 
-        if (shoot_is_string_equal(peer_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1) && peer_header.state == GAME_STATE_PONG)
+        if (shoot_is_string_equal(peer_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1) &&
+            peer_header.state == GAME_STATE_PONG)
         {
+            struct ShootPongGameData peer_pong_data = {};
+            shoot_net_poll(network_socket, max_socket, &peer_pong_data, sizeof(peer_pong_data), 0, 0);
+
             if (peer_header.was_here_first && !network_up_to_date_with_peers)
             {
                 printf("other player was here first\n");
@@ -254,14 +257,14 @@ static void pong_loop()
 
         struct ShootNetHeader send_header = { .ID = SHOOT_NET_HEADER_ID, .state = state,
             .was_here_first = !(peer_header.was_here_first) };
-
+        shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
         if (send_header.was_here_first)
         {
             network_up_to_date_with_peers = TRUE;
         }
 
-        shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
-        shoot_net_send(destination_socket, peer_address, &pong_data, sizeof(pong_data));
+        if (peer_header.state == GAME_STATE_PONG)
+        { shoot_net_send(destination_socket, peer_address, &pong_data, sizeof(pong_data)); }
     }
 }
 static void pong_render(real alpha_time)
@@ -415,14 +418,12 @@ static void menu_loop()
 
     if (network_state == SHOOT_NET_STATUS_PLAYER_ONE)
     {
-        struct ShootNetHeader temp_header = {};
-        struct ShootPlayerCursor temp_cursor = {};
+        struct ShootNetHeader peer_header = {};
         struct sockaddr_storage temp_socket_address;
         socklen_t temp_socket_address_length = sizeof(temp_socket_address);
-        shoot_net_poll(network_socket, max_socket, &temp_header, sizeof(temp_header),
+        shoot_net_poll(network_socket, max_socket, &peer_header, sizeof(peer_header),
             (struct sockaddr *)&temp_socket_address, &temp_socket_address_length);
-        bool32 cursor_exists = shoot_net_poll(network_socket, max_socket, &temp_cursor, sizeof(temp_cursor), 0, 0);
-        if (shoot_is_string_equal(temp_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1))
+        if (shoot_is_string_equal(peer_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1))
         {
             if (!ISVALIDSOCKET(destination_socket))
             {
@@ -432,8 +433,10 @@ static void menu_loop()
                 destination_socket = shoot_net_open_peer_socket(hostname_buffer, SHOOT_NET_PORT_P2, &peer_address);
                 printf("connected to %s %s\n", hostname_buffer, port_buffer);
             }
-            if (temp_header.state == GAME_STATE_MENU && cursor_exists)
+            if (peer_header.state == GAME_STATE_MENU)
             {
+                struct ShootPlayerCursor temp_cursor = {};
+                shoot_net_poll(network_socket, max_socket, &temp_cursor, sizeof(temp_cursor), 0, 0);
                 menu_player_two = temp_cursor;
             }
         }
@@ -442,20 +445,19 @@ static void menu_loop()
         {
             struct ShootNetHeader send_header = shoot_net_make_send_header();
             shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
-            shoot_net_send(destination_socket, peer_address, &menu_player_one, sizeof(menu_player_one));
+            if (peer_header.state == GAME_STATE_MENU)
+            { shoot_net_send(destination_socket, peer_address, &menu_player_one, sizeof(menu_player_one)); }
         }
     }
     if (network_state == SHOOT_NET_STATUS_PLAYER_TWO)
     {
-        struct ShootNetHeader temp_header = {};
-        struct ShootPlayerCursor temp_cursor = {};
+        struct ShootNetHeader peer_header = {};
         struct sockaddr_storage temp_socket_address;
         socklen_t temp_socket_address_length = sizeof(temp_socket_address);
-        shoot_net_poll(network_socket, max_socket, &temp_header, sizeof(temp_header), 
+        shoot_net_poll(network_socket, max_socket, &peer_header, sizeof(peer_header), 
                 (struct sockaddr *)&temp_socket_address, &temp_socket_address_length);
-        bool32 cursor_exists = shoot_net_poll(network_socket, max_socket, &temp_cursor, sizeof(temp_cursor), 0, 0);
 
-        if (shoot_is_string_equal(temp_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1))
+        if (shoot_is_string_equal(peer_header.ID, SHOOT_NET_HEADER_ID, sizeof(SHOOT_NET_HEADER_ID) - 1))
         {
             if (!ISVALIDSOCKET(destination_socket))
             {
@@ -466,8 +468,10 @@ static void menu_loop()
                 destination_socket = shoot_net_open_peer_socket(hostname_buffer, SHOOT_NET_PORT, &peer_address);
                 printf("connected to %s %s\n", hostname_buffer, port_buffer);
             }
-            if (temp_header.state == GAME_STATE_MENU && cursor_exists)
+            if (peer_header.state == GAME_STATE_MENU)
             {
+                struct ShootPlayerCursor temp_cursor = {};
+                shoot_net_poll(network_socket, max_socket, &temp_cursor, sizeof(temp_cursor), 0, 0);
                 menu_player_one = temp_cursor;
             }
         }
@@ -475,7 +479,8 @@ static void menu_loop()
         {
             struct ShootNetHeader send_header = shoot_net_make_send_header();
             shoot_net_send(destination_socket, peer_address, &send_header, sizeof(send_header));
-            shoot_net_send(destination_socket, peer_address, &menu_player_two, sizeof(menu_player_two));
+            if (peer_header.state == GAME_STATE_MENU)
+            { shoot_net_send(destination_socket, peer_address, &menu_player_two, sizeof(menu_player_two)); }
         }
     }
 }
@@ -523,27 +528,36 @@ static void menu_render(real alpha_time)
     }
 }
 
+bool32 first_loop = TRUE;
 static bool32 game_loop()
 {
-    if (shoot_input_just_released(&window.data->input[0], KEY_ESC))
+    if (first_loop)
     {
-        shoot_game_change_state(GAME_STATE_MENU);
-    }
-    switch(state)
-    {
-        case GAME_STATE_MENU:
-            menu_loop();
-            break;
-        case GAME_STATE_PONG:
-            pong_loop();
-            break;
-        default:
-            game_end = TRUE;
-            break;
+        if (shoot_input_just_released(&window.data->input[0], KEY_ESC))
+        {
+            shoot_game_change_state(GAME_STATE_MENU);
+        }
+        switch(state)
+        {
+            case GAME_STATE_MENU:
+                menu_loop();
+                break;
+            case GAME_STATE_PONG:
+                pong_loop();
+                break;
+            default:
+                game_end = TRUE;
+                break;
+        }
     }
 
     window.data->accumulated_time -= PHYSICS_TICK_SPEED;
-    if (window.data->accumulated_time >= PHYSICS_TICK_SPEED) { return TRUE; }
+    if (window.data->accumulated_time >= PHYSICS_TICK_SPEED)
+    {
+        first_loop = FALSE;
+        return TRUE;
+    }
+    first_loop = TRUE;
     return FALSE;
 }
 static void game_render(real alpha_time)
